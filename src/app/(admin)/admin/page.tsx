@@ -1,0 +1,85 @@
+import { Clock, ShoppingCart, DollarSign, Boxes } from "lucide-react";
+import {
+  getBestSellers,
+  getDashboardSummary,
+  getLowStock,
+  getRecentOrders,
+  getSalesByDay,
+} from "@/services/admin";
+import { formatPrice } from "@/lib/utils";
+import { KpiCard } from "@/components/admin/kpi-card";
+import { SalesChart } from "@/components/admin/sales-chart";
+import { RecentOrders } from "@/components/admin/recent-orders";
+import { BestSellersList } from "@/components/admin/best-sellers";
+import { LowStockList } from "@/components/admin/low-stock";
+
+export const dynamic = "force-dynamic";
+
+export default async function AdminDashboardPage() {
+  const [summary, salesByDay, bestSellers, recent, lowStock] = await Promise.all([
+    getDashboardSummary(),
+    getSalesByDay(14),
+    getBestSellers(5),
+    getRecentOrders(8),
+    getLowStock(5),
+  ]);
+
+  return (
+    <div className="flex flex-col gap-6">
+      <header>
+        <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Live snapshot of your store.
+        </p>
+      </header>
+
+      <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <KpiCard
+          label="Revenue"
+          value={formatPrice(summary.total_revenue)}
+          hint={`${summary.total_orders} total orders`}
+          icon={<DollarSign className="h-4 w-4" />}
+        />
+        <KpiCard
+          label="Pending"
+          value={String(summary.pending_orders)}
+          hint="awaiting confirmation"
+          tone={summary.pending_orders > 0 ? "warning" : "default"}
+          icon={<Clock className="h-4 w-4" />}
+        />
+        <KpiCard
+          label="Active"
+          value={String(summary.active_orders)}
+          hint="confirmed → shipping"
+          icon={<ShoppingCart className="h-4 w-4" />}
+        />
+        <KpiCard
+          label="Low stock"
+          value={String(summary.low_stock_count)}
+          hint={
+            summary.out_of_stock_count > 0
+              ? `${summary.out_of_stock_count} out of stock`
+              : `${summary.active_products} active products`
+          }
+          tone={
+            summary.out_of_stock_count > 0
+              ? "destructive"
+              : summary.low_stock_count > 0
+                ? "warning"
+                : "default"
+          }
+          icon={<Boxes className="h-4 w-4" />}
+        />
+      </section>
+
+      <SalesChart data={salesByDay} />
+
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+        <RecentOrders orders={recent} />
+        <BestSellersList products={bestSellers} />
+      </div>
+
+      <LowStockList rows={lowStock} />
+    </div>
+  );
+}

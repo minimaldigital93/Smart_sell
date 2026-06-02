@@ -1,0 +1,65 @@
+export const en = {
+  "lang.label": "Language",
+  "lang.en": "English",
+  "lang.km": "ខ្មែរ",
+
+  "nav.home": "Home",
+  "nav.shop": "Shop",
+  "nav.cart": "Cart",
+  "nav.search": "Search",
+  "nav.account": "Account",
+  "nav.orders": "Orders",
+  "nav.wishlist": "Wishlist",
+  "nav.notifications": "Notifications",
+
+  "shop.featured": "Featured",
+  "shop.bestSellers": "Best sellers",
+  "shop.categories": "Categories",
+  "shop.viewAll": "View all",
+  "shop.outOfStock": "Out of stock",
+  "shop.addToCart": "Add to cart",
+  "shop.added": "Added to cart",
+  "shop.search.placeholder": "Search lipstick, serum…",
+
+  "cart.title": "Cart",
+  "cart.empty": "Your cart is empty",
+  "cart.subtotal": "Subtotal",
+  "cart.shipping": "Shipping",
+  "cart.total": "Total",
+  "cart.checkout": "Checkout",
+  "cart.remove": "Remove",
+
+  "checkout.title": "Checkout",
+  "checkout.name": "Full name",
+  "checkout.phone": "Phone",
+  "checkout.address": "Delivery address",
+  "checkout.note": "Note (optional)",
+  "checkout.payment": "Payment method",
+  "checkout.uploadProof": "Upload payment screenshot",
+  "checkout.submit": "Place order",
+  "checkout.placing": "Placing order…",
+  "checkout.coupon": "Coupon code",
+  "checkout.applyCoupon": "Apply",
+  "checkout.couponApplied": "Coupon applied",
+
+  "order.status.pending": "Pending",
+  "order.status.payment_confirmed": "Payment confirmed",
+  "order.status.preparing": "Preparing",
+  "order.status.shipping": "Shipping",
+  "order.status.delivered": "Delivered",
+  "order.status.cancelled": "Cancelled",
+
+  "account.signOut": "Sign out",
+  "account.signIn": "Sign in",
+  "account.register": "Create account",
+
+  "common.loading": "Loading…",
+  "common.retry": "Retry",
+  "common.save": "Save",
+  "common.cancel": "Cancel",
+  "common.confirm": "Confirm",
+  "common.required": "Required",
+} as const;
+
+export type TranslationKey = keyof typeof en;
+export type Dict = Record<TranslationKey, string>;

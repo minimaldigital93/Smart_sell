@@ -1,26 +1,122 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  --color-background: #ffffff;
+  --color-foreground: #0a0a0a;
+  --color-muted: #f5f3f1;
+  --color-muted-foreground: #6b6660;
+  --color-border: #ece8e4;
+  --color-input: #ece8e4;
+  --color-ring: #e8b4b8;
+
+  --color-card: #ffffff;
+  --color-card-foreground: #0a0a0a;
+
+  --color-primary: #d49097;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #faf3f1;
+  --color-secondary-foreground: #4a3f3a;
+  --color-accent: #f5e0dc;
+  --color-accent-foreground: #4a3f3a;
+  --color-destructive: #d4453d;
+  --color-destructive-foreground: #ffffff;
+  --color-success: #4a8a6f;
+  --color-warning: #c98a3a;
+
+  --color-nude-50: #faf6f3;
+  --color-nude-100: #f5ebe5;
+  --color-nude-200: #ecd9cf;
+  --color-nude-300: #d9b8a8;
+  --color-nude-400: #c89886;
+  --color-nude-500: #b07765;
+
+  --color-pink-50: #fdf2f4;
+  --color-pink-100: #fbe4e8;
+  --color-pink-200: #f5c4cd;
+  --color-pink-300: #ebadb5;
+  --color-pink-400: #d49097;
+  --color-pink-500: #b56a72;
+
+  --radius-xs: 0.5rem;
+  --radius-sm: 0.75rem;
+  --radius-md: 1rem;
+  --radius-lg: 1.25rem;
+  --radius-xl: 1.75rem;
+  --radius-2xl: 2rem;
+
+  --shadow-soft: 0 1px 2px rgba(20, 14, 12, 0.04), 0 8px 24px rgba(20, 14, 12, 0.06);
+  --shadow-card: 0 1px 3px rgba(20, 14, 12, 0.05), 0 12px 32px rgba(20, 14, 12, 0.08);
+  --shadow-popover: 0 8px 32px rgba(20, 14, 12, 0.12);
+
+  --font-sans: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  --font-display: var(--font-geist-sans), "SF Pro Display", system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+html,
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+html {
+  -webkit-tap-highlight-color: transparent;
+  /* iOS Safari momentum scrolling */
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Honor user motion preferences and let the browser pick the cheapest path */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
   }
 }
 
+html[lang="km"] body,
+html[lang="km"] {
+  font-family: var(--font-khmer), var(--font-sans);
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  /* iOS safe-area aware base padding */
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* iPhone-friendly tap targets */
+button,
+a {
+  touch-action: manipulation;
+}
+
+/* Hide focus rings on mouse users; keep for keyboard */
+:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+@layer utilities {
+  .safe-pt {
+    padding-top: env(safe-area-inset-top);
+  }
+  .safe-pb {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .safe-px {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }
