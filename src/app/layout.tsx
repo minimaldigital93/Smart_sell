@@ -1,7 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Noto_Serif_Khmer } from "next/font/google";
 import { Providers } from "@/components/shared/providers";
-import { APP_NAME, APP_TAGLINE } from "@/lib/constants";
+import { SwipeNavigation } from "@/components/shared/swipe-navigation";
+import { APP_TAGLINE } from "@/lib/constants";
 import { getServerLocale } from "@/lib/i18n/server";
 import { getStoreSettings } from "@/services/settings";
 import { themeStyleVars } from "@/lib/theme/presets";
@@ -24,24 +25,31 @@ const notoKhmer = Noto_Serif_Khmer({
   display: "swap",
 });
 
-export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"),
-  title: { default: `${APP_NAME} — ${APP_TAGLINE}`, template: `%s · ${APP_NAME}` },
-  description:
-    "Premium cosmetic store with smart inventory, barcode stock management, and KHQR checkout — built for Cambodia.",
-  applicationName: APP_NAME,
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: "default",
-    title: APP_NAME,
-  },
-  formatDetection: { telephone: false, date: false, address: false, email: false, url: false },
-  icons: {
-    icon: "/icons/icon-192.png",
-    apple: "/icons/apple-touch-icon.png",
-  },
-  manifest: "/manifest.webmanifest",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const settings = await getStoreSettings();
+  const name = settings.businessName;
+  const tagline = settings.tagline || APP_TAGLINE;
+  return {
+    metadataBase: new URL(
+      process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
+    ),
+    title: { default: `${name} — ${tagline}`, template: `%s · ${name}` },
+    description:
+      "Premium cosmetic store with smart inventory, barcode stock management, and KHQR checkout — built for Cambodia.",
+    applicationName: name,
+    appleWebApp: {
+      capable: true,
+      statusBarStyle: "default",
+      title: name,
+    },
+    formatDetection: { telephone: false, date: false, address: false, email: false, url: false },
+    icons: {
+      icon: settings.logoUrl ?? "/icons/icon-192.png",
+      apple: settings.logoUrl ?? "/icons/apple-touch-icon.png",
+    },
+    manifest: "/manifest.webmanifest",
+  };
+}
 
 export const viewport: Viewport = {
   themeColor: "#ffffff",
@@ -71,6 +79,7 @@ export default async function RootLayout({
             shippingFee: settings.shippingFee,
           }}
         >
+          <SwipeNavigation />
           {children}
         </Providers>
       </body>

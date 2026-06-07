@@ -20,7 +20,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Brand } from "@/components/shared/brand";
-import { BackButton } from "@/components/shared/back-button";
 import type { UserRoleEnum } from "@/types/database";
 
 type NavItem = {
@@ -86,8 +85,6 @@ export function AdminShell({
 }) {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
-  // The dashboard is the admin "home"; every deeper page gets a Back affordance.
-  const isRoot = pathname === "/admin";
 
   const visible = (item: NavItem) => !item.adminOnly || isAdmin;
   const secondary = SECONDARY_NAV.filter(visible);
@@ -159,11 +156,6 @@ export function AdminShell({
         </header>
 
         <main className="mx-auto w-full max-w-3xl flex-1 px-4 pb-24 pt-4 md:pb-8 md:pt-6">
-          {!isRoot ? (
-            <div className="mb-2 -ml-2">
-              <BackButton fallbackHref="/admin" />
-            </div>
-          ) : null}
           {children}
         </main>
 

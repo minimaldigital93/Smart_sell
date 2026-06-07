@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CheckCircle2 } from "lucide-react";
-import { getOrderById } from "@/services/orders";
+import { getOrderConfirmation } from "@/services/orders";
 import { formatPrice } from "@/lib/utils";
 import { getStoreSettings } from "@/services/settings";
 import { buttonVariants } from "@/components/ui/button";
@@ -15,7 +15,7 @@ export const metadata = { title: "Order placed" };
 
 export default async function OrderSuccessPage({ params }: { params: Params }) {
   const { id } = await params;
-  const data = await getOrderById(id);
+  const data = await getOrderConfirmation(id);
   if (!data) notFound();
   const { order, items } = data;
   const { currency } = await getStoreSettings();
@@ -96,15 +96,26 @@ export default async function OrderSuccessPage({ params }: { params: Params }) {
       </section>
 
       <div className="flex flex-col gap-3">
-        <Link
-          href={`/orders/${order.id}`}
-          className={cn(buttonVariants({ size: "lg" }), "w-full")}
-        >
-          View order details
-        </Link>
+        {/* Order detail tracking is account-bound (RLS). Only surface it for
+            signed-in customers — a guest order (user_id null) can't be opened
+            there, so we'd send them to a login wall and then a 404. */}
+        {order.user_id ? (
+          <Link
+            href={`/orders/${order.id}`}
+            className={cn(buttonVariants({ size: "lg" }), "w-full")}
+          >
+            View order details
+          </Link>
+        ) : null}
         <Link
           href="/shop"
-          className={cn(buttonVariants({ variant: "outline", size: "md" }), "w-full")}
+          className={cn(
+            buttonVariants({
+              variant: order.user_id ? "outline" : "default",
+              size: "lg",
+            }),
+            "w-full",
+          )}
         >
           Continue shopping
         </Link>

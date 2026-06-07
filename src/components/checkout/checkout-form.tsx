@@ -2,13 +2,14 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { submitOrderAction } from "@/app/actions/orders";
 import { useCartStore } from "@/store/cart-store";
 import {
   checkoutCustomerSchema,
+  checkoutAccountSchema,
   type CheckoutCustomerValues,
 } from "@/lib/checkout/schemas";
 import { Input } from "@/components/ui/input";
@@ -24,14 +25,18 @@ import { CouponField, type AppliedCoupon } from "@/components/checkout/coupon-fi
 import { PointsField, type AppliedPoints } from "@/components/checkout/points-field";
 import { useFormatPrice } from "@/lib/settings/store-config";
 
+type CheckoutFormValues = CheckoutCustomerValues & { password?: string };
+
 export function CheckoutForm({
   defaultName,
   defaultPhone,
   loyaltyPoints = 0,
+  isAuthenticated = false,
 }: {
   defaultName?: string | null;
   defaultPhone?: string | null;
   loyaltyPoints?: number;
+  isAuthenticated?: boolean;
 }) {
   "use no memo";
   const router = useRouter();
@@ -49,21 +54,24 @@ export function CheckoutForm({
     watch,
     control,
     formState: { errors },
-  } = useForm<CheckoutCustomerValues>({
-    resolver: zodResolver(checkoutCustomerSchema),
+  } = useForm<CheckoutFormValues>({
+    resolver: zodResolver(
+      isAuthenticated ? checkoutCustomerSchema : checkoutAccountSchema,
+    ) as Resolver<CheckoutFormValues>,
     defaultValues: {
       customer_name: defaultName ?? "",
       phone: defaultPhone ?? "",
       address: "",
       note: "",
       payment_method: "khqr",
+      password: "",
     },
   });
 
   // eslint-disable-next-line react-hooks/incompatible-library
   const paymentMethod = watch("payment_method");
 
-  async function onSubmit(values: CheckoutCustomerValues) {
+  async function onSubmit(values: CheckoutFormValues) {
     if (items.length === 0) {
       toast.error("Your cart is empty.");
       return;
@@ -87,6 +95,9 @@ export function CheckoutForm({
       ),
     );
     fd.append("screenshot", screenshot);
+    if (!isAuthenticated && values.password) {
+      fd.append("password", values.password);
+    }
     if (coupon) fd.append("coupon_code", coupon.code);
     if (points) fd.append("points_to_redeem", String(points.points));
 
@@ -155,6 +166,29 @@ export function CheckoutForm({
           </div>
         </div>
       </section>
+
+      {!isAuthenticated ? (
+        <section className="rounded-2xl border border-border bg-card p-5 shadow-soft">
+          <h2 className="mb-1 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            Create your account
+          </h2>
+          <p className="mb-4 text-xs text-muted-foreground">
+            Set a password so you can log in with your phone and track this
+            order.
+          </p>
+          <div>
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
+              type="password"
+              autoComplete="new-password"
+              placeholder="At least 8 characters"
+              {...register("password")}
+            />
+            <FieldError message={errors.password?.message} />
+          </div>
+        </section>
+      ) : null}
 
       <section className="rounded-2xl border border-border bg-card p-5 shadow-soft">
         <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-muted-foreground">

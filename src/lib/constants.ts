@@ -1,4 +1,4 @@
-export const APP_NAME = "Lumière";
+export const APP_NAME = "minimaldigital";
 export const APP_TAGLINE = "Cosmetic Store Management";
 
 export const CATEGORIES = [

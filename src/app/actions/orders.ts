@@ -7,6 +7,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { submitOrderSchema } from "@/lib/checkout/schemas";
 import { requireStaff } from "@/lib/auth/session";
 import { checkRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
+import { normalizePhone, phoneToEmail } from "@/lib/auth/phone";
 import { notifyNewOrder } from "@/lib/notifications/telegram";
 import { updateOrderStatusSchema } from "@/lib/orders/schemas";
 import { canTransition } from "@/lib/orders/transitions";
@@ -61,6 +62,13 @@ export async function submitOrderAction(
   }
   const values = parsed.data;
   const supabase = await createClient();
+
+  // 1b. Ensure the buyer has an account. Logged-in customers skip this; a guest
+  //     creates one (phone + password) — or signs in if the phone is already
+  //     registered — so the order is tied to a login they can return to. Done
+  //     before any storage/order work so a bad password fails fast and cheap.
+  const accountErr = await ensureCheckoutAccount(supabase, formData, values);
+  if (accountErr) return { ok: false, error: accountErr };
 
   // 2. Validate + size the payment screenshot BEFORE touching the order. The
   //    actual order (price recompute, stock check, coupon + points redemption)
@@ -149,6 +157,58 @@ export async function submitOrderAction(
   });
 
   return { ok: true, orderId };
+}
+
+type SupabaseServer = Awaited<ReturnType<typeof createClient>>;
+
+/**
+ * Guarantee the buyer is authenticated before the order is created (the
+ * create_customer_order RPC stamps the order with auth.uid()). Returns an error
+ * string to surface to the customer, or null on success.
+ *
+ * - Already signed in → nothing to do.
+ * - New phone → sign up with the supplied password (logs them in).
+ * - Phone already registered → treat the password as a login; wrong password
+ *   is rejected so we never hijack an existing account.
+ */
+async function ensureCheckoutAccount(
+  supabase: SupabaseServer,
+  formData: FormData,
+  values: { customer_name: string; phone: string },
+): Promise<string | null> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (user) return null;
+
+  const passwordRaw = formData.get("password");
+  const password = typeof passwordRaw === "string" ? passwordRaw : "";
+  if (password.length < 8) {
+    return "Create a password (at least 8 characters) to place your order.";
+  }
+
+  const email = phoneToEmail(values.phone);
+  const { data: signUp, error: signUpErr } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: { name: values.customer_name, phone: normalizePhone(values.phone) },
+    },
+  });
+
+  // New account created and signed in.
+  if (!signUpErr && signUp.session) return null;
+
+  // Either the phone is already registered, or "Confirm email" is on (signUp
+  // returns no session). In both cases, treat the password as a login attempt
+  // against the existing account.
+  const { error: signInErr } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
+  if (!signInErr) return null;
+
+  return "This phone already has an account. Enter its password to continue, or log in first.";
 }
 
 /** Translate raised RPC error codes into friendly, customer-facing copy. */

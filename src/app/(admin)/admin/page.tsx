@@ -1,31 +1,24 @@
 import { Clock, ShoppingCart, DollarSign, Boxes } from "lucide-react";
 import {
-  getBestSellers,
   getDashboardSummary,
   getLowStock,
-  getRecentOrders,
   getSalesByDay,
 } from "@/services/admin";
 import { formatPrice } from "@/lib/utils";
 import { getStoreSettings } from "@/services/settings";
 import { KpiCard } from "@/components/admin/kpi-card";
 import { SalesChart } from "@/components/admin/sales-chart";
-import { RecentOrders } from "@/components/admin/recent-orders";
-import { BestSellersList } from "@/components/admin/best-sellers";
 import { LowStockList } from "@/components/admin/low-stock";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminDashboardPage() {
-  const [summary, salesByDay, bestSellers, recent, lowStock, { currency }] =
-    await Promise.all([
-      getDashboardSummary(),
-      getSalesByDay(14),
-      getBestSellers(5),
-      getRecentOrders(8),
-      getLowStock(5),
-      getStoreSettings(),
-    ]);
+  const [summary, salesByDay, lowStock, { currency }] = await Promise.all([
+    getDashboardSummary(),
+    getSalesByDay(14),
+    getLowStock(5),
+    getStoreSettings(),
+  ]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -76,11 +69,6 @@ export default async function AdminDashboardPage() {
       </section>
 
       <SalesChart data={salesByDay} />
-
-      <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-        <RecentOrders orders={recent} />
-        <BestSellersList products={bestSellers} />
-      </div>
 
       <LowStockList rows={lowStock} />
     </div>

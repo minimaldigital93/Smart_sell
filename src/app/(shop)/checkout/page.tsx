@@ -22,6 +22,7 @@ export default async function CheckoutPage() {
         defaultName={session?.profile.name}
         defaultPhone={session?.profile.phone}
         loyaltyPoints={loyaltyPoints}
+        isAuthenticated={Boolean(session?.profile.id)}
       />
     </div>
   );

@@ -1,6 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
 import type { ProductCategoryEnum } from "@/types/database";
-import type { Order } from "@/types";
 
 export type DashboardSummary = {
   total_orders: number;
@@ -14,16 +13,6 @@ export type DashboardSummary = {
 
 export type SalesDay = { day: string; orders: number; revenue: number };
 
-export type BestSeller = {
-  product_id: string;
-  name: string;
-  slug: string;
-  images: string[];
-  category: ProductCategoryEnum;
-  total_sold: number;
-  total_revenue: number;
-};
-
 export type LowStockRow = {
   product_id: string;
   name: string;
@@ -33,11 +22,6 @@ export type LowStockRow = {
   minimum_stock: number;
   is_out_of_stock: boolean;
 };
-
-export type RecentOrder = Pick<
-  Order,
-  "id" | "customer_name" | "status" | "total" | "created_at" | "payment_method"
->;
 
 const EMPTY_SUMMARY: DashboardSummary = {
   total_orders: 0,
@@ -80,21 +64,6 @@ export async function getSalesByDay(days = 14): Promise<SalesDay[]> {
   return (data ?? []).slice().reverse();
 }
 
-export async function getBestSellers(limit = 5): Promise<BestSeller[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("v_best_sellers" as never)
-    .select("*")
-    .limit(limit)
-    .returns<BestSeller[]>();
-
-  if (error) {
-    console.error("[admin.bestSellers]", error);
-    return [];
-  }
-  return data ?? [];
-}
-
 export async function getLowStock(limit = 5): Promise<LowStockRow[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -105,22 +74,6 @@ export async function getLowStock(limit = 5): Promise<LowStockRow[]> {
 
   if (error) {
     console.error("[admin.lowStock]", error);
-    return [];
-  }
-  return data ?? [];
-}
-
-export async function getRecentOrders(limit = 8): Promise<RecentOrder[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("orders")
-    .select("id, customer_name, status, total, created_at, payment_method")
-    .order("created_at", { ascending: false })
-    .limit(limit)
-    .returns<RecentOrder[]>();
-
-  if (error) {
-    console.error("[admin.recentOrders]", error);
     return [];
   }
   return data ?? [];
