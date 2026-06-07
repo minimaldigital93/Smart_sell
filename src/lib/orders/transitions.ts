@@ -2,8 +2,9 @@ import type { OrderStatusEnum } from "@/types/database";
 
 /**
  * Allowed status transitions. `delivered` and `cancelled` are terminal.
- * Cancellation is allowed from any non-terminal state — admin handles refund
- * + manual inventory put-back if needed.
+ * Cancellation is allowed from any non-terminal state. On cancel the DB
+ * automatically restocks inventory and refunds any spent loyalty points /
+ * coupon (see migrations 0023 + 0024); admin only handles the money refund.
  */
 export const ALLOWED_TRANSITIONS: Record<OrderStatusEnum, OrderStatusEnum[]> = {
   pending: ["payment_confirmed", "cancelled"],

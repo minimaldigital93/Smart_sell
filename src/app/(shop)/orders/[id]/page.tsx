@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/auth/session";
 import { formatPrice } from "@/lib/utils";
 import { PAYMENT_INSTRUCTIONS } from "@/lib/checkout/payment-instructions";
 import { ClientDate } from "@/components/shared/client-date";
+import { getSignedStorageUrl } from "@/lib/storage/signed-url";
 
 type Params = Promise<{ id: string }>;
 
@@ -32,6 +33,10 @@ export default async function OrderDetailPage({ params }: { params: Params }) {
   const data = await getOrderById(id);
   if (!data) notFound();
   const { order, items } = data;
+  const receiptUrl = await getSignedStorageUrl(
+    "payment-proofs",
+    order.payment_image,
+  );
   const reachedIndex = STATUS_STEPS.indexOf(
     order.status as (typeof STATUS_STEPS)[number],
   );
@@ -127,9 +132,9 @@ export default async function OrderDetailPage({ params }: { params: Params }) {
         <p className="text-sm font-medium">
           {PAYMENT_INSTRUCTIONS[order.payment_method].label}
         </p>
-        {order.payment_image ? (
+        {receiptUrl ? (
           <a
-            href={order.payment_image}
+            href={receiptUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="mt-3 inline-block text-sm text-primary underline-offset-4 hover:underline"

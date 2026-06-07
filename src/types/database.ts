@@ -298,6 +298,37 @@ export type Database = {
           max_redemptions: number | null;
         }[];
       };
+      create_customer_order: {
+        Args: {
+          p_order_id: string;
+          p_customer_name: string;
+          p_phone: string;
+          p_address: string;
+          p_note: string | null;
+          p_payment_method: PaymentMethodEnum;
+          p_payment_image: string | null;
+          p_items: { product_id: string; quantity: number }[];
+          p_coupon_code?: string | null;
+          p_points?: number;
+        };
+        Returns: { order_id: string; total: number };
+      };
+      unredeem_coupon: {
+        Args: { p_code: string };
+        Returns: null;
+      };
+      refund_order_credits: {
+        Args: { p_order_id: string };
+        Returns: null;
+      };
+      check_rate_limit: {
+        Args: { p_key: string; p_limit: number; p_window_sec: number };
+        Returns: {
+          allowed: boolean;
+          remaining?: number;
+          retry_after?: number;
+        };
+      };
     };
     Enums: {
       user_role: UserRoleEnum;

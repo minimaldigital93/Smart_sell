@@ -18,10 +18,19 @@ export async function listNotifications(limit = 50): Promise<Notification[]> {
 
 export async function getUnreadCount(): Promise<number> {
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return 0;
+
+  // Scope to the viewer's own feed: their targeted rows + broadcasts. Staff
+  // RLS can SELECT every notification in the system, so without this filter
+  // the badge counts every customer's unread order updates too.
   const { count, error } = await supabase
     .from("notifications")
     .select("*", { count: "exact", head: true })
-    .is("read_at", null);
+    .is("read_at", null)
+    .or(`user_id.eq.${user.id},user_id.is.null`);
 
   if (error) {
     console.error("[notifications.unread]", error);

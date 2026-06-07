@@ -131,6 +131,10 @@ export async function updatePasswordAction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const limited = await checkRateLimit("auth:update-password", 5, 600);
+  if (!limited.ok) {
+    return { ok: false, error: rateLimitMessage(limited.retryAfterSec) };
+  }
   const parsed = updatePasswordSchema.safeParse({
     password: formData.get("password"),
     confirm: formData.get("confirm"),

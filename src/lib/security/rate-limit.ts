@@ -1,7 +1,12 @@
 import { headers } from "next/headers";
+import { createClient } from "@/lib/supabase/server";
 
 type Bucket = { count: number; resetAt: number };
 
+// Per-instance fallback only. The shared authority is the check_rate_limit
+// Postgres RPC (migration 0026); this Map is used solely when that RPC is
+// unreachable, so a DB hiccup degrades to local throttling rather than
+// failing fully open.
 const store = new Map<string, Bucket>();
 
 const DEFAULT_SWEEP_AFTER = 5 * 60 * 1000;
@@ -55,7 +60,31 @@ export async function checkRateLimit(
   windowSec: number,
 ): Promise<RateLimitResult> {
   const ip = await getClientIp();
-  return rateLimit(`${action}:${ip}`, limit, windowSec);
+  const key = `${action}:${ip}`;
+
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc("check_rate_limit", {
+      p_key: key,
+      p_limit: limit,
+      p_window_sec: windowSec,
+    });
+    if (error || !data) throw error ?? new Error("rate-limit: no data");
+
+    const res = data as {
+      allowed: boolean;
+      remaining?: number;
+      retry_after?: number;
+    };
+    return res.allowed
+      ? { ok: true, remaining: res.remaining ?? 0 }
+      : { ok: false, retryAfterSec: res.retry_after ?? windowSec };
+  } catch (err) {
+    // Shared store unavailable (e.g. migration not yet applied) — fall back to
+    // the per-instance limiter so we still throttle a single hot instance.
+    console.error("[rate-limit] falling back to in-memory:", err);
+    return rateLimit(key, limit, windowSec);
+  }
 }
 
 export function rateLimitMessage(retryAfterSec: number): string {

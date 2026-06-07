@@ -53,6 +53,15 @@ export async function submitCounterSaleAction(
   }
   const byId = new Map(products.map((p) => [p.id, p]));
 
+  // Pre-validate stock so we never create a phantom order we can't fulfil.
+  const { data: invRows } = await supabase
+    .from("product_inventory")
+    .select("product_id, current_stock")
+    .in("product_id", productIds);
+  const stockById = new Map(
+    (invRows ?? []).map((r) => [r.product_id, r.current_stock]),
+  );
+
   let subtotal = 0;
   const lineItems: Array<{
     product_id: string;
@@ -72,6 +81,13 @@ export async function submitCounterSaleAction(
       discountNum > 0 && discountNum < priceNum ? discountNum : priceNum;
     if (!(unit > 0)) {
       return { ok: false, error: `${p.name} has no price set.` };
+    }
+    const stock = stockById.get(p.id) ?? 0;
+    if (stock < line.quantity) {
+      return {
+        ok: false,
+        error: `Not enough stock for ${p.name} (${stock} left).`,
+      };
     }
     subtotal += unit * line.quantity;
     lineItems.push({
@@ -113,12 +129,17 @@ export async function submitCounterSaleAction(
     };
   }
 
+  // Delete the half-built order (items cascade) so a failure never leaves a
+  // phantom 'pending' sale polluting the orders list / dashboard KPIs.
+  const discardOrder = () => supabase.from("orders").delete().eq("id", orderId);
+
   const { error: itemsErr } = await supabase
     .from("order_items")
     .insert(lineItems.map((li) => ({ ...li, order_id: orderId })));
   if (itemsErr) {
     console.error("[pos.submit] items insert", itemsErr);
-    return { ok: false, error: "Sale saved but items failed. Contact support." };
+    await discardOrder();
+    return { ok: false, error: "Could not save sale items. Please retry." };
   }
 
   // 2. Flip status -> payment_confirmed; trigger decrements stock atomically.
@@ -128,6 +149,7 @@ export async function submitCounterSaleAction(
     .eq("id", orderId);
   if (statusErr) {
     const msg = statusErr.message ?? "";
+    await discardOrder();
     if (msg.includes("insufficient stock")) {
       return {
         ok: false,

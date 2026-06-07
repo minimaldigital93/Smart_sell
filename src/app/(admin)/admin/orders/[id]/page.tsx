@@ -9,6 +9,7 @@ import { OrderStatusControl } from "@/components/admin/orders/order-status-contr
 import { OrderTimeline } from "@/components/admin/orders/order-timeline";
 import { PAYMENT_INSTRUCTIONS } from "@/lib/checkout/payment-instructions";
 import { ClientDate } from "@/components/shared/client-date";
+import { getSignedStorageUrl } from "@/lib/storage/signed-url";
 
 type Params = Promise<{ id: string }>;
 
@@ -23,6 +24,10 @@ export default async function AdminOrderDetailPage({
   const data = await getOrderForAdmin(id);
   if (!data) notFound();
   const { order, items } = data;
+  const receiptUrl = await getSignedStorageUrl(
+    "payment-proofs",
+    order.payment_image,
+  );
 
   const isCounterSale = order.address === "In-store pickup";
   const isCompletedSale =
@@ -149,18 +154,18 @@ export default async function AdminOrderDetailPage({
         <p className="text-sm font-medium">
           {PAYMENT_INSTRUCTIONS[order.payment_method].label}
         </p>
-        {order.payment_image ? (
+        {receiptUrl ? (
           <a
-            href={order.payment_image}
+            href={receiptUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="mt-3 inline-block overflow-hidden rounded-xl border border-border"
           >
-            {/* Use img tag here so we avoid configuring remotePatterns for
-                every Supabase storage subpath — it's already a public URL. */}
+            {/* Short-lived signed URL from the private payment-proofs bucket;
+                img tag avoids configuring remotePatterns for storage subpaths. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={order.payment_image}
+              src={receiptUrl}
               alt="Payment receipt screenshot"
               className="max-h-72 w-auto"
             />

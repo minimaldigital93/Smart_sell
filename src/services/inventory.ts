@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getSignedStorageUrl } from "@/lib/storage/signed-url";
 import type { MovementTypeEnum } from "@/types/database";
 import type { InventoryMovement, ProductInventory } from "@/types";
 
@@ -146,5 +147,17 @@ export async function listMovements(opts: {
     console.error("[inventory.movements]", error);
     return [];
   }
-  return (data ?? []) as unknown as MovementWithProduct[];
+  const rows = (data ?? []) as unknown as MovementWithProduct[];
+
+  // movement-proofs is a private bucket — swap the stored reference for a
+  // short-lived signed URL the (staff) viewer can actually load.
+  return Promise.all(
+    rows.map(async (m) => ({
+      ...m,
+      barcode_image_url: await getSignedStorageUrl(
+        "movement-proofs",
+        m.barcode_image_url,
+      ),
+    })),
+  );
 }
