@@ -119,6 +119,8 @@ create table if not exists public.products (
   barcode         text,
   sku             text,
   featured        boolean not null default false,
+  on_sale         boolean not null default false,
+  new_arrival     boolean not null default false,
   is_active       boolean not null default true,
   created_at      timestamptz not null default now(),
   updated_at      timestamptz not null default now(),
@@ -132,6 +134,8 @@ create unique index if not exists products_sku_unique on public.products(sku) wh
 create unique index if not exists products_barcode_unique on public.products(barcode) where barcode is not null;
 create index if not exists products_category_idx on public.products(category) where is_active;
 create index if not exists products_featured_idx on public.products(featured) where featured and is_active;
+create index if not exists products_on_sale_idx on public.products(on_sale) where on_sale and is_active;
+create index if not exists products_new_arrival_idx on public.products(new_arrival) where new_arrival and is_active;
 create index if not exists products_created_at_idx on public.products(created_at desc);
 
 drop trigger if exists products_set_updated_at on public.products;

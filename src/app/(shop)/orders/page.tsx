@@ -1,9 +1,11 @@
 import Link from "next/link";
+import { Receipt, Package, ChevronRight } from "lucide-react";
 import { requireUser } from "@/lib/auth/session";
 import { getMyOrders } from "@/services/orders";
 import { formatPrice } from "@/lib/utils";
 import { getStoreSettings } from "@/services/settings";
 import { EmptyState } from "@/components/shop/empty-state";
+import { PageHero } from "@/components/shared/page-hero";
 import { ClientDate } from "@/components/shared/client-date";
 
 export const metadata = { title: "My orders" };
@@ -33,12 +35,19 @@ export default async function OrdersPage() {
 
   return (
     <div className="flex flex-col gap-5 pt-2">
-      <header>
-        <h1 className="text-2xl font-semibold tracking-tight">Your orders</h1>
-      </header>
+      <PageHero
+        icon={Receipt}
+        title="Your orders"
+        subtitle={
+          orders.length > 0
+            ? `${orders.length} ${orders.length === 1 ? "order" : "orders"} placed`
+            : "Track every order you place"
+        }
+      />
 
       {orders.length === 0 ? (
         <EmptyState
+          icon={Package}
           title="No orders yet"
           description="Once you place an order, it’ll appear here."
         />
@@ -48,16 +57,19 @@ export default async function OrdersPage() {
             <li key={o.id}>
               <Link
                 href={`/orders/${o.id}`}
-                className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-card px-4 py-4 shadow-soft transition-colors hover:bg-muted"
+                className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-4 shadow-soft transition-colors hover:bg-muted"
               >
-                <div className="min-w-0">
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-secondary text-primary">
+                  <Package className="h-5 w-5" />
+                </span>
+                <div className="min-w-0 flex-1">
                   <p className="font-mono text-xs text-muted-foreground">
                     {o.id.slice(0, 8)}
                   </p>
                   <p className="mt-0.5 text-sm font-medium">
                     <ClientDate date={o.created_at} format="MMM d, yyyy · HH:mm" />
                   </p>
-                  <p className="mt-1 text-sm text-muted-foreground">
+                  <p className="mt-1 text-sm font-semibold tabular-nums">
                     {formatPrice(o.total, currency)}
                   </p>
                 </div>
@@ -66,6 +78,7 @@ export default async function OrdersPage() {
                 >
                   {STATUS_LABEL[o.status] ?? o.status}
                 </span>
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
               </Link>
             </li>
           ))}

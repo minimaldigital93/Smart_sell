@@ -29,7 +29,7 @@ export function CartSummary({
       <hr className="my-3 border-border" />
       <div className="flex items-baseline justify-between">
         <span className="text-sm font-medium">Total</span>
-        <span className="text-lg font-semibold tabular-nums">
+        <span className="text-xl font-semibold tabular-nums text-primary">
           {formatPrice(total)}
         </span>
       </div>

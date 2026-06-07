@@ -63,6 +63,8 @@ export function ProductForm({ mode, defaults }: Props) {
       barcode: defaults?.barcode ?? "",
       sku: defaults?.sku ?? "",
       featured: defaults?.featured ?? false,
+      on_sale: defaults?.on_sale ?? false,
+      new_arrival: defaults?.new_arrival ?? false,
       is_active: defaults?.is_active ?? true,
       initial_stock: defaults?.initial_stock ?? 0,
       images: defaults?.images ?? [],
@@ -278,15 +280,18 @@ export function ProductForm({ mode, defaults }: Props) {
       </section>
 
       <section className="rounded-2xl border border-border bg-card p-5 shadow-soft">
-        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-          Visibility
+        <h2 className="mb-1 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+          Storefront status
         </h2>
+        <p className="mb-4 text-xs text-muted-foreground">
+          Curate where this product appears in the customer storefront.
+        </p>
         <div className="flex flex-col gap-3 text-sm">
           <label className="flex items-center justify-between gap-3 rounded-xl px-1">
             <span>
               <span className="block font-medium">Featured</span>
               <span className="block text-xs text-muted-foreground">
-                Shown on the home page
+                Shown in “Featured picks” on the home page
               </span>
             </span>
             <input
@@ -296,6 +301,32 @@ export function ProductForm({ mode, defaults }: Props) {
             />
           </label>
           <label className="flex items-center justify-between gap-3 rounded-xl px-1">
+            <span>
+              <span className="block font-medium">On sale</span>
+              <span className="block text-xs text-muted-foreground">
+                Shown in “On sale now”; add a discount price for a badge
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              {...register("on_sale")}
+              className="h-5 w-5 accent-pink-400"
+            />
+          </label>
+          <label className="flex items-center justify-between gap-3 rounded-xl px-1">
+            <span>
+              <span className="block font-medium">New arrival</span>
+              <span className="block text-xs text-muted-foreground">
+                Shown in “New arrivals” with a “New” badge
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              {...register("new_arrival")}
+              className="h-5 w-5 accent-pink-400"
+            />
+          </label>
+          <label className="flex items-center justify-between gap-3 rounded-xl border-t border-border/60 px-1 pt-3">
             <span>
               <span className="block font-medium">Active</span>
               <span className="block text-xs text-muted-foreground">

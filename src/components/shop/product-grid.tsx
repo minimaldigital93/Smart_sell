@@ -1,3 +1,4 @@
+import { PackageSearch } from "lucide-react";
 import type { Product } from "@/types";
 import { ProductCard } from "@/components/shop/product-card";
 import { EmptyState } from "@/components/shop/empty-state";
@@ -12,7 +13,13 @@ export function ProductGrid({
   emptyDescription?: string;
 }) {
   if (products.length === 0) {
-    return <EmptyState title={emptyTitle} description={emptyDescription} />;
+    return (
+      <EmptyState
+        icon={PackageSearch}
+        title={emptyTitle}
+        description={emptyDescription}
+      />
+    );
   }
 
   return (

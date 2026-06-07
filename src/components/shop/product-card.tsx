@@ -41,11 +41,22 @@ export function ProductCard({ product }: { product: Product }) {
           </div>
         )}
 
-        {hasDiscount ? (
-          <span className="absolute left-2 top-2 rounded-full bg-pink-500 px-2 py-0.5 text-[11px] font-semibold text-white shadow-soft">
-            −{discountPercent(priceNum, discountNum)}%
-          </span>
-        ) : null}
+        <div className="absolute left-2 top-2 flex flex-col items-start gap-1">
+          {hasDiscount ? (
+            <span className="rounded-full bg-pink-500 px-2 py-0.5 text-[11px] font-semibold text-white shadow-soft">
+              −{discountPercent(priceNum, discountNum)}%
+            </span>
+          ) : product.on_sale ? (
+            <span className="rounded-full bg-pink-500 px-2 py-0.5 text-[11px] font-semibold text-white shadow-soft">
+              Sale
+            </span>
+          ) : null}
+          {product.new_arrival ? (
+            <span className="rounded-full bg-emerald-500 px-2 py-0.5 text-[11px] font-semibold text-white shadow-soft">
+              New
+            </span>
+          ) : null}
+        </div>
 
         {outOfStock ? (
           <span className="absolute right-2 top-2 rounded-full bg-foreground/85 px-2 py-0.5 text-[11px] font-medium text-white">

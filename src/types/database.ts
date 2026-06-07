@@ -67,6 +67,8 @@ export type Database = {
           barcode: string | null;
           sku: string | null;
           featured: boolean;
+          on_sale: boolean;
+          new_arrival: boolean;
           is_active: boolean;
           created_at: Timestamp;
           updated_at: Timestamp;

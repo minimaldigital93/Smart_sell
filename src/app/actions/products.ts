@@ -55,6 +55,8 @@ export async function createProductAction(input: unknown): Promise<ProductAction
     barcode: v.barcode,
     sku: v.sku,
     featured: v.featured ?? false,
+    on_sale: v.on_sale ?? false,
+    new_arrival: v.new_arrival ?? false,
     is_active: v.is_active ?? true,
     stock: v.initial_stock,
   });
@@ -98,6 +100,8 @@ export async function updateProductAction(input: unknown): Promise<ProductAction
     barcode: v.barcode,
     sku: v.sku,
     featured: v.featured ?? false,
+    on_sale: v.on_sale ?? false,
+    new_arrival: v.new_arrival ?? false,
     is_active: v.is_active ?? true,
   });
 

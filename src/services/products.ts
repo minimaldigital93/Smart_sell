@@ -25,12 +25,29 @@ export async function getPromoProducts(limit = 8): Promise<Product[]> {
     .from("products")
     .select("*")
     .eq("is_active", true)
-    .not("discount_price", "is", null)
+    .eq("on_sale", true)
     .order("created_at", { ascending: false })
     .limit(limit);
 
   if (error) {
     console.error("[products.getPromos]", error);
+    return [];
+  }
+  return data ?? [];
+}
+
+export async function getNewArrivalProducts(limit = 8): Promise<Product[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("products")
+    .select("*")
+    .eq("is_active", true)
+    .eq("new_arrival", true)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error("[products.getNewArrivals]", error);
     return [];
   }
   return data ?? [];

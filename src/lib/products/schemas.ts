@@ -28,6 +28,8 @@ export const productInputSchema = z
     barcode: z.string().trim().max(64).optional().or(z.literal("")),
     sku: z.string().trim().max(64).optional().or(z.literal("")),
     featured: z.coerce.boolean().optional().default(false),
+    on_sale: z.coerce.boolean().optional().default(false),
+    new_arrival: z.coerce.boolean().optional().default(false),
     is_active: z.coerce.boolean().optional().default(true),
     initial_stock: z.coerce.number().int().nonnegative().default(0),
     images: z.array(z.string().url()).default([]),

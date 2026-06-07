@@ -42,6 +42,8 @@ export default async function EditProductPage({ params }: { params: Params }) {
           barcode: product.barcode ?? "",
           sku: product.sku ?? "",
           featured: product.featured,
+          on_sale: product.on_sale,
+          new_arrival: product.new_arrival,
           is_active: product.is_active,
           initial_stock: product.stock,
           images: product.images,

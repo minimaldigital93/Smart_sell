@@ -9,14 +9,12 @@ import { BarcodeScanner } from "@/components/admin/scanner/barcode-scanner";
 import { lookupProductByBarcodeAction } from "@/app/actions/scan";
 import { submitCounterSaleAction } from "@/app/actions/pos";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useFormatPrice } from "@/lib/settings/store-config";
-import {
-  PAYMENT_METHODS,
-  type PaymentMethod,
-} from "@/lib/constants";
+import { type PaymentMethod } from "@/lib/constants";
 import { PAYMENT_INSTRUCTIONS } from "@/lib/checkout/payment-instructions";
+
+// Counter sales only accept KHQR or cash at the till.
+const POS_PAYMENT_METHODS = ["khqr", "cash"] as const satisfies readonly PaymentMethod[];
 
 type CartLine = {
   productId: string;
@@ -34,9 +32,6 @@ export function PosFlow() {
   const [scanning, setScanning] = useState(false);
   const [lines, setLines] = useState<CartLine[]>([]);
   const [payment, setPayment] = useState<PaymentMethod>("cash");
-  const [customerName, setCustomerName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [note, setNote] = useState("");
   const [submitting, startTransition] = useTransition();
 
   const totals = useMemo(() => {
@@ -131,9 +126,6 @@ export function PosFlow() {
     startTransition(async () => {
       const result = await submitCounterSaleAction({
         payment_method: payment,
-        customer_name: customerName,
-        phone,
-        note,
         items: lines.map((l) => ({
           productId: l.productId,
           quantity: l.quantity,
@@ -145,9 +137,6 @@ export function PosFlow() {
       }
       toast.success(`Sale recorded · ${formatPrice(result.total)}`);
       setLines([]);
-      setCustomerName("");
-      setPhone("");
-      setNote("");
       router.push(`/admin/orders/${result.orderId}`);
       router.refresh();
     });
@@ -247,8 +236,8 @@ export function PosFlow() {
         <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
           Payment
         </h2>
-        <div className="grid grid-cols-3 gap-2">
-          {PAYMENT_METHODS.map((m) => {
+        <div className="grid grid-cols-2 gap-2">
+          {POS_PAYMENT_METHODS.map((m) => {
             const active = m === payment;
             return (
               <button
@@ -265,45 +254,6 @@ export function PosFlow() {
               </button>
             );
           })}
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-border bg-card p-5 shadow-soft">
-        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-          Customer (optional)
-        </h2>
-        <div className="flex flex-col gap-3">
-          <div>
-            <Label htmlFor="pos-name">Name</Label>
-            <Input
-              id="pos-name"
-              autoComplete="off"
-              placeholder="Walk-in customer"
-              value={customerName}
-              onChange={(e) => setCustomerName(e.target.value)}
-            />
-          </div>
-          <div>
-            <Label htmlFor="pos-phone">Phone</Label>
-            <Input
-              id="pos-phone"
-              autoComplete="off"
-              inputMode="tel"
-              placeholder="—"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-            />
-          </div>
-          <div>
-            <Label htmlFor="pos-note">Note</Label>
-            <Input
-              id="pos-note"
-              autoComplete="off"
-              placeholder="optional"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-            />
-          </div>
         </div>
       </section>
 

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Heart } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { useWishlistStore } from "@/store/wishlist-store";
@@ -46,6 +47,7 @@ export function WishlistView() {
   if (products.length === 0) {
     return (
       <EmptyState
+        icon={Heart}
         title="Your wishlist is empty"
         description="Tap the heart on a product to save it."
         action={
