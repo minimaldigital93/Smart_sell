@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { validateCouponAction } from "@/app/actions/coupons";
-import { formatPrice } from "@/lib/utils";
+import { useFormatPrice } from "@/lib/settings/store-config";
 
 export type AppliedCoupon = {
   code: string;
@@ -16,6 +16,7 @@ export function CouponField({
   subtotal: number;
   onChange: (coupon: AppliedCoupon | null) => void;
 }) {
+  const formatPrice = useFormatPrice();
   const [input, setInput] = useState("");
   const [applied, setApplied] = useState<AppliedCoupon | null>(null);
   const [error, setError] = useState<string | null>(null);

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireUser } from "@/lib/auth/session";
 import { getMyOrders } from "@/services/orders";
 import { formatPrice } from "@/lib/utils";
+import { getStoreSettings } from "@/services/settings";
 import { EmptyState } from "@/components/shop/empty-state";
 import { ClientDate } from "@/components/shared/client-date";
 
@@ -28,6 +29,7 @@ const STATUS_TONE: Record<string, string> = {
 export default async function OrdersPage() {
   const user = await requireUser("/orders");
   const orders = await getMyOrders(user.id);
+  const { currency } = await getStoreSettings();
 
   return (
     <div className="flex flex-col gap-5 pt-2">
@@ -56,7 +58,7 @@ export default async function OrdersPage() {
                     <ClientDate date={o.created_at} format="MMM d, yyyy · HH:mm" />
                   </p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {formatPrice(o.total)}
+                    {formatPrice(o.total, currency)}
                   </p>
                 </div>
                 <span

@@ -2,25 +2,17 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { humanizeAuthError } from "@/lib/auth/errors";
 import { checkRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
+import { normalizePhone, phoneToEmail } from "@/lib/auth/phone";
 import {
   signInSchema,
   signUpSchema,
-  resetRequestSchema,
   updatePasswordSchema,
 } from "@/lib/auth/schemas";
 
 export type ActionState = { ok: boolean; error?: string; message?: string };
-
-async function getOrigin() {
-  const hdrs = await headers();
-  const host = hdrs.get("host");
-  const protocol = hdrs.get("x-forwarded-proto") ?? "http";
-  return process.env.NEXT_PUBLIC_APP_URL ?? `${protocol}://${host}`;
-}
 
 export async function signInAction(
   _prev: ActionState,
@@ -31,7 +23,7 @@ export async function signInAction(
     return { ok: false, error: rateLimitMessage(limited.retryAfterSec) };
   }
   const parsed = signInSchema.safeParse({
-    email: formData.get("email"),
+    phone: formData.get("phone"),
     password: formData.get("password"),
   });
   if (!parsed.success) {
@@ -42,12 +34,33 @@ export async function signInAction(
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword(parsed.data);
+  const { data: signInData, error } = await supabase.auth.signInWithPassword({
+    email: phoneToEmail(parsed.data.phone),
+    password: parsed.data.password,
+  });
   if (error) return { ok: false, error: humanizeAuthError(error) };
 
-  const redirectTo = (formData.get("redirectTo") as string | null) || "/";
+  // Honor an explicit redirect target (e.g. a protected page the user was
+  // sent here from). Otherwise route by role: admins/staff to the dashboard,
+  // everyone else to their own profile.
+  const requested = (formData.get("redirectTo") as string | null) || "/";
+  let destination = requested;
+  if (requested === "/") {
+    const userId = signInData.user?.id;
+    let role: string | null = null;
+    if (userId) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", userId)
+        .maybeSingle();
+      role = profile?.role ?? null;
+    }
+    destination = role === "admin" || role === "staff" ? "/admin" : "/account";
+  }
+
   revalidatePath("/", "layout");
-  redirect(redirectTo);
+  redirect(destination);
 }
 
 export async function signUpAction(
@@ -60,7 +73,7 @@ export async function signUpAction(
   }
   const parsed = signUpSchema.safeParse({
     name: formData.get("name"),
-    email: formData.get("email"),
+    phone: formData.get("phone"),
     password: formData.get("password"),
   });
   if (!parsed.success) {
@@ -71,22 +84,22 @@ export async function signUpAction(
   }
 
   const supabase = await createClient();
-  const origin = await getOrigin();
+  const normalizedPhone = normalizePhone(parsed.data.phone);
 
   const { data, error } = await supabase.auth.signUp({
-    email: parsed.data.email,
+    email: phoneToEmail(parsed.data.phone),
     password: parsed.data.password,
     options: {
-      data: { name: parsed.data.name },
-      emailRedirectTo: `${origin}/auth/callback?next=/`,
+      data: { name: parsed.data.name, phone: normalizedPhone },
     },
   });
 
   if (error) return { ok: false, error: humanizeAuthError(error) };
 
-  // If the project requires email confirmation, session will be null.
+  // No email confirmation for phone signups. If the project still has
+  // "Confirm email" enabled, no session is returned — send them to sign in.
   if (!data.session) {
-    redirect("/login?confirm=1");
+    redirect("/login?registered=1");
   }
 
   revalidatePath("/", "layout");
@@ -98,33 +111,6 @@ export async function signOutAction(): Promise<void> {
   await supabase.auth.signOut();
   revalidatePath("/", "layout");
   redirect("/");
-}
-
-export async function resetRequestAction(
-  _prev: ActionState,
-  formData: FormData,
-): Promise<ActionState> {
-  const limited = await checkRateLimit("auth:reset", 3, 600);
-  if (!limited.ok) {
-    return { ok: false, error: rateLimitMessage(limited.retryAfterSec) };
-  }
-  const parsed = resetRequestSchema.safeParse({ email: formData.get("email") });
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message };
-  }
-
-  const supabase = await createClient();
-  const origin = await getOrigin();
-  const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
-    redirectTo: `${origin}/auth/callback?next=/reset-password/update`,
-  });
-
-  if (error) return { ok: false, error: humanizeAuthError(error) };
-  return {
-    ok: true,
-    message:
-      "If an account exists for that email, we sent a reset link. Check your inbox.",
-  };
 }
 
 export async function updatePasswordAction(

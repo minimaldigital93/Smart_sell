@@ -1,30 +1,31 @@
 import { z } from "zod";
+import { normalizePhone } from "@/lib/auth/phone";
 
-export const emailSchema = z
+export const phoneSchema = z
   .string()
   .trim()
-  .min(1, "Email is required")
-  .email("Enter a valid email");
+  .min(1, "Phone number is required")
+  .refine((v) => {
+    const digits = normalizePhone(v);
+    return digits.length >= 8 && digits.length <= 9;
+  }, "Enter a valid phone number");
 
 export const passwordSchema = z
   .string()
   .min(8, "Password must be at least 8 characters");
 
 export const signInSchema = z.object({
-  email: emailSchema,
+  phone: phoneSchema,
   password: z.string().min(1, "Password is required"),
 });
 export type SignInValues = z.infer<typeof signInSchema>;
 
 export const signUpSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(120),
-  email: emailSchema,
+  phone: phoneSchema,
   password: passwordSchema,
 });
 export type SignUpValues = z.infer<typeof signUpSchema>;
-
-export const resetRequestSchema = z.object({ email: emailSchema });
-export type ResetRequestValues = z.infer<typeof resetRequestSchema>;
 
 export const updatePasswordSchema = z
   .object({

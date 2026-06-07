@@ -1,11 +1,13 @@
 import Link from "next/link";
 import type { Order } from "@/types";
 import { formatPrice } from "@/lib/utils";
+import { getStoreSettings } from "@/services/settings";
 import { OrderStatusBadge } from "@/components/admin/order-status-badge";
 import { EmptyState } from "@/components/shop/empty-state";
 import { ClientDate } from "@/components/shared/client-date";
 
-export function OrdersTable({ orders }: { orders: Order[] }) {
+export async function OrdersTable({ orders }: { orders: Order[] }) {
+  const { currency } = await getStoreSettings();
   if (orders.length === 0) {
     return (
       <EmptyState
@@ -51,7 +53,7 @@ export function OrdersTable({ orders }: { orders: Order[] }) {
                   {o.payment_method}
                 </td>
                 <td className="px-3 py-3 text-right tabular-nums font-medium">
-                  {formatPrice(o.total)}
+                  {formatPrice(o.total, currency)}
                 </td>
                 <td className="px-3 py-3">
                   <OrderStatusBadge status={o.status} />
@@ -76,7 +78,7 @@ export function OrdersTable({ orders }: { orders: Order[] }) {
                 <p className="line-clamp-1 text-sm font-medium">{o.customer_name}</p>
                 <p className="text-xs text-muted-foreground">
                   <ClientDate date={o.created_at} format="MMM d · HH:mm" /> ·{" "}
-                  {formatPrice(o.total)}
+                  {formatPrice(o.total, currency)}
                 </p>
                 <p className="font-mono text-[10px] text-muted-foreground">
                   {o.id.slice(0, 8)}

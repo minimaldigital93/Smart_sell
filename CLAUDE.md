@@ -30,13 +30,13 @@ The final application must feel:
 
 # PHASE PROGRESS
 
-Last updated: 2026-05-23 (Phase 13 row + project structure refreshed against repo; loyalty points landed). Status reflects code present in the repo, not necessarily QA-verified.
+Last updated: 2026-06-07 (phone-based auth, store settings + theme/branding, business-flow audit migrations 0022–0030). Status reflects code present in the repo, not necessarily QA-verified.
 
 | Phase | Area | Status |
 |-------|------|--------|
 | 1 | Project Foundation (Next.js 15, TS, Tailwind, shadcn, Supabase, PWA, ESLint, Prettier) | ✅ Done |
 | 2 | Database Architecture (schema.sql, migrations/, policies/, seed/, tests/) | ✅ Done |
-| 3 | Authentication (login, register, reset-password, callback, sign-out, lib/auth) | ✅ Done |
+| 3 | Authentication — phone + password (synthetic email `<digits>@phone.csms.app`, `lib/auth/phone.ts`); login, register, callback, sign-out, lib/auth. Reset-password page/form removed. | ✅ Done |
 | 4 | Public Storefront (shop, category, product, search, account, wishlist) | ✅ Done |
 | 5 | Cart + Checkout (cart, checkout, success page, KHQR upload) | ✅ Done |
 | 6 | Admin Dashboard (admin layout, dashboard, sidebar) | ✅ Done |
@@ -46,7 +46,7 @@ Last updated: 2026-05-23 (Phase 13 row + project structure refreshed against rep
 | 10 | Order Management (admin/orders, print/orders/[id]) | ✅ Done |
 | 11 | Notifications (admin + shop notifications, components/notifications) | ✅ Done |
 | 12 | Security + Performance (lib/security, PWA manifest, offline page, sw.js) | ✅ Done |
-| 13 | Optional Advanced — done: coupons (admin CRUD + checkout redeem), wishlist, Khmer i18n, POS (cash payment method + admin/pos), Telegram helper (`lib/notifications/telegram.ts`, best-effort, env-gated), loyalty points (earn on delivered, redeem at checkout — `lib/loyalty`, `services/loyalty.ts`, `actions/loyalty.ts`, migration 0020). Pending: supplier management, multi-store, expiration tracking, advanced analytics. | 🟡 Partial |
+| 13 | Optional Advanced — done: coupons (admin CRUD + checkout redeem), wishlist, Khmer i18n, POS (cash payment method + admin/pos), Telegram helper (`lib/notifications/telegram.ts`, best-effort, env-gated), loyalty points (earn on delivered, redeem at checkout — `lib/loyalty`, `services/loyalty.ts`, `actions/loyalty.ts`, migration 0020), store settings + branding/theme (singleton `store_settings` table, admin/settings page, `lib/settings`, `services/settings.ts`, `actions/settings.ts`, 6 curated theme presets in `lib/theme/presets.ts`, `branding` storage bucket, migration 0028). Pending: supplier management, multi-store, expiration tracking, advanced analytics. | 🟡 Partial |
 
 When asked to "continue", default to Phase 13 remaining items unless the user specifies otherwise.
 
@@ -156,10 +156,10 @@ Actual layout (rooted at `src/`, plus top-level `database/`):
 
 ```bash
 src/app/
-  (admin)/admin/         # dashboard, products, inventory, orders, scan, coupons, pos, notifications
-  (auth)/                # login, register, reset-password
+  (admin)/admin/         # dashboard, products, inventory, orders, scan, coupons, pos, notifications, settings
+  (auth)/                # login, register (phone + password; no reset-password)
   (shop)/                # shop, category, product, search, cart, checkout, wishlist, account, orders, notifications
-  actions/               # server actions: auth, products, orders, inventory, scan, coupons, pos, loyalty, notifications
+  actions/               # server actions: auth, products, orders, inventory, scan, coupons, pos, loyalty, notifications, settings
   api/health/            # health check route
   auth/                  # supabase auth callback / sign-out
   print/orders/[id]/     # printable invoice
@@ -169,23 +169,30 @@ src/app/
 src/components/
   ui/                    # shadcn primitives
   shared/                # cross-feature widgets
-  admin/                 # admin-shell, kpi-card, sales-chart, products/orders/inventory/scanner/coupons/pos
+  admin/                 # admin-shell, kpi-card, sales-chart, products/orders/inventory/scanner/coupons/pos/settings
   shop/                  # product-card, gallery, cart, wishlist-view, search-bar, favorite-button
+  shared/                # incl. brand.tsx, back-button.tsx
   auth/, cart/, checkout/, notifications/, inventory/
 
-src/lib/                 # auth, supabase, products, orders, inventory, checkout, coupons, loyalty, i18n, notifications, security
-src/services/            # client/server data services per domain (incl. loyalty.ts)
+src/lib/                 # auth (incl. phone.ts), supabase, products, orders, inventory, checkout, coupons, loyalty,
+                         #   settings, theme (presets.ts), i18n, notifications, security
+src/services/            # client/server data services per domain (incl. loyalty.ts, settings.ts)
 src/hooks/  src/store/   # zustand + react-query glue
 src/types/  src/utils/
 src/proxy.ts             # supabase client proxy
 
 database/
-  migrations/            # 0001..0021 (extensions, profiles, products+inventory, orders, movements,
+  migrations/            # 0001..0030 (extensions, profiles, products+inventory, orders, movements,
                          #   notifications, functions/triggers, RLS, realtime, ingredients,
                          #   payment-proofs bucket, admin views, product-images bucket,
                          #   notifications audience+triggers, coupons, movement barcode-proofs+bucket,
                          #   payment_method='cash' for POS, loyalty points,
-                         #   drop ambiguous apply_inventory_movement overload)
+                         #   drop ambiguous apply_inventory_movement overload (0021),
+                         #   allow adjustment-to-zero (0022), align sales view + restock-on-cancel (0023),
+                         #   order integrity + credit refunds (0024), private media buckets (0025),
+                         #   DB-backed rate limits (0026), lock payment-proofs upload (0027),
+                         #   store_settings + branding bucket (0028), phone-auth profile trigger (0029),
+                         #   reset users + seed admin (0030))
   policies/, seed/, tests/, _all_migrations.sql
 ```
 
@@ -265,7 +272,8 @@ Generate:
 # PHASE 3 — AUTHENTICATION SYSTEM
 
 Roles: admin, staff, customer
-Generate: Login, Register, Password reset, Middleware, Route protection, Secure session handling
+Auth method: phone number + password (no email, no SMS provider). Each phone is mapped to a stable synthetic email `<normalized-digits>@phone.csms.app` for Supabase password auth — sign-up and sign-in must normalize the number identically (see `lib/auth/phone.ts`). No password-reset flow (removed).
+Generate: Login, Register, Middleware, Route protection, Secure session handling
 
 ---
 

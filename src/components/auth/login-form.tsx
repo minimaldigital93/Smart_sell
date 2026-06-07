@@ -26,13 +26,14 @@ export function LoginForm({ redirectTo = "/" }: { redirectTo?: string }) {
     <form action={formAction} className="flex flex-col gap-4">
       <input type="hidden" name="redirectTo" value={redirectTo} />
       <div>
-        <Label htmlFor="email">Email</Label>
+        <Label htmlFor="phone">Phone number</Label>
         <Input
-          id="email"
-          name="email"
-          type="email"
-          autoComplete="email"
-          inputMode="email"
+          id="phone"
+          name="phone"
+          type="tel"
+          autoComplete="tel"
+          inputMode="tel"
+          placeholder="012 345 678"
           required
         />
       </div>

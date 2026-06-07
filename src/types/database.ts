@@ -260,6 +260,25 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["loyalty_transactions"]["Row"]>;
         Relationships: [];
       };
+      store_settings: {
+        Row: {
+          id: number;
+          business_name: string;
+          tagline: string;
+          logo_url: string | null;
+          theme: string;
+          default_locale: "en" | "km";
+          currency: string;
+          shipping_fee: number;
+          contact_phone: string | null;
+          contact_address: string | null;
+          updated_at: Timestamp;
+          updated_by: string | null;
+        };
+        Insert: Partial<Database["public"]["Tables"]["store_settings"]["Row"]>;
+        Update: Partial<Database["public"]["Tables"]["store_settings"]["Row"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {

@@ -3,6 +3,8 @@ import { Geist, Geist_Mono, Noto_Serif_Khmer } from "next/font/google";
 import { Providers } from "@/components/shared/providers";
 import { APP_NAME, APP_TAGLINE } from "@/lib/constants";
 import { getServerLocale } from "@/lib/i18n/server";
+import { getStoreSettings } from "@/services/settings";
+import { themeStyleVars } from "@/lib/theme/presets";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -53,14 +55,24 @@ export const viewport: Viewport = {
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  const locale = await getServerLocale();
+  const settings = await getStoreSettings();
+  const locale = await getServerLocale(settings.defaultLocale);
   return (
     <html
       lang={locale}
+      style={themeStyleVars(settings.theme)}
       className={`${geistSans.variable} ${geistMono.variable} ${notoKhmer.variable} h-full antialiased`}
     >
       <body className="bg-background text-foreground min-h-full flex flex-col">
-        <Providers initialLocale={locale}>{children}</Providers>
+        <Providers
+          initialLocale={locale}
+          storeConfig={{
+            currency: settings.currency,
+            shippingFee: settings.shippingFee,
+          }}
+        >
+          {children}
+        </Providers>
       </body>
     </html>
   );

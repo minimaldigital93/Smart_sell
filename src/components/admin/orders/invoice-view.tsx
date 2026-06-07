@@ -3,15 +3,17 @@ import { APP_NAME, APP_TAGLINE } from "@/lib/constants";
 import { STATUS_LABEL } from "@/lib/orders/transitions";
 import { PAYMENT_INSTRUCTIONS } from "@/lib/checkout/payment-instructions";
 import { formatPrice } from "@/lib/utils";
+import { getStoreSettings } from "@/services/settings";
 import { ClientDate } from "@/components/shared/client-date";
 
-export function InvoiceView({
+export async function InvoiceView({
   order,
   items,
 }: {
   order: Order;
   items: OrderItem[];
 }) {
+  const { currency } = await getStoreSettings();
   return (
     <article className="mx-auto flex max-w-2xl flex-col gap-8 bg-white p-8 text-[13px] leading-relaxed text-black print:p-0">
       <header className="flex items-start justify-between gap-6 border-b border-black/10 pb-6">
@@ -63,10 +65,10 @@ export function InvoiceView({
                 <td className="py-2.5">{i.product_name}</td>
                 <td className="py-2.5 text-right tabular-nums">{i.quantity}</td>
                 <td className="py-2.5 text-right tabular-nums">
-                  {formatPrice(i.price)}
+                  {formatPrice(i.price, currency)}
                 </td>
                 <td className="py-2.5 text-right font-medium tabular-nums">
-                  {formatPrice(i.price * i.quantity)}
+                  {formatPrice(i.price * i.quantity, currency)}
                 </td>
               </tr>
             ))}
@@ -75,12 +77,12 @@ export function InvoiceView({
       </section>
 
       <section className="ml-auto flex w-full max-w-xs flex-col gap-2 text-sm">
-        <Row label="Subtotal" value={formatPrice(order.subtotal)} />
-        <Row label="Shipping" value={formatPrice(order.shipping_fee)} />
+        <Row label="Subtotal" value={formatPrice(order.subtotal, currency)} />
+        <Row label="Shipping" value={formatPrice(order.shipping_fee, currency)} />
         <div className="mt-1 flex items-baseline justify-between border-t border-black/15 pt-2">
           <span className="text-sm font-semibold">Total</span>
           <span className="text-base font-semibold tabular-nums">
-            {formatPrice(order.total)}
+            {formatPrice(order.total, currency)}
           </span>
         </div>
       </section>

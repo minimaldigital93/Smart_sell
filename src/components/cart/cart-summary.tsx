@@ -1,17 +1,18 @@
 "use client";
 
 import { useCartStore } from "@/store/cart-store";
-import { formatPrice } from "@/lib/utils";
-import { SHIPPING_FEE_DEFAULT } from "@/lib/constants";
+import { useFormatPrice, useShippingFee } from "@/lib/settings/store-config";
 
 export function CartSummary({
   showShipping = true,
 }: {
   showShipping?: boolean;
 }) {
+  const formatPrice = useFormatPrice();
+  const shippingFee = useShippingFee();
   const subtotal = useCartStore((s) => s.subtotal());
   const itemCount = useCartStore((s) => s.count());
-  const shipping = subtotal > 0 ? SHIPPING_FEE_DEFAULT : 0;
+  const shipping = subtotal > 0 ? shippingFee : 0;
   const total = subtotal + shipping;
 
   return (

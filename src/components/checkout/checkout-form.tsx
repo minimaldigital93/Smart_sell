@@ -22,7 +22,7 @@ import { OrderSummary } from "@/components/checkout/order-summary";
 import { CartSummary } from "@/components/cart/cart-summary";
 import { CouponField, type AppliedCoupon } from "@/components/checkout/coupon-field";
 import { PointsField, type AppliedPoints } from "@/components/checkout/points-field";
-import { formatPrice } from "@/lib/utils";
+import { useFormatPrice } from "@/lib/settings/store-config";
 
 export function CheckoutForm({
   defaultName,
@@ -35,6 +35,7 @@ export function CheckoutForm({
 }) {
   "use no memo";
   const router = useRouter();
+  const formatPrice = useFormatPrice();
   const items = useCartStore((s) => s.items);
   const subtotal = useCartStore((s) => s.subtotal());
   const [submitting, setSubmitting] = useState(false);

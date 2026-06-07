@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { OrderStatusBadge } from "@/components/admin/order-status-badge";
 import { formatPrice } from "@/lib/utils";
+import { getStoreSettings } from "@/services/settings";
 import { EmptyState } from "@/components/shop/empty-state";
 import { ClientDate } from "@/components/shared/client-date";
 import type { RecentOrder } from "@/services/admin";
 
-export function RecentOrders({ orders }: { orders: RecentOrder[] }) {
+export async function RecentOrders({ orders }: { orders: RecentOrder[] }) {
+  const { currency } = await getStoreSettings();
   return (
     <section className="rounded-2xl border border-border bg-card p-5 shadow-soft">
       <header className="mb-3 flex items-baseline justify-between">
@@ -36,7 +38,7 @@ export function RecentOrders({ orders }: { orders: RecentOrder[] }) {
                   </p>
                   <p className="text-xs text-muted-foreground">
                     <ClientDate date={o.created_at} format="MMM d · HH:mm" /> ·{" "}
-                    {formatPrice(o.total)}
+                    {formatPrice(o.total, currency)}
                   </p>
                 </div>
                 <OrderStatusBadge status={o.status} />

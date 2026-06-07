@@ -72,6 +72,11 @@ const nextConfig: NextConfig = {
     qualities: [50, 75, 90],
   },
   experimental: {
+    // Server Actions cap request bodies at 1 MB by default, which rejected
+    // logo uploads (allowed up to 2 MB) before the action ran. Give headroom.
+    serverActions: {
+      bodySizeLimit: "4mb",
+    },
     optimizePackageImports: [
       "lucide-react",
       "framer-motion",

@@ -1,19 +1,25 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { Search } from "lucide-react";
-import { APP_NAME } from "@/lib/constants";
 import { getCurrentUser } from "@/lib/auth/session";
+import { getStoreSettings } from "@/services/settings";
 import { getUnreadCount } from "@/services/notifications";
+import { Brand } from "@/components/shared/brand";
 import { NotificationBell } from "@/components/notifications/notification-bell";
 import { NotificationsRealtime } from "@/components/notifications/notifications-realtime";
 import { LanguageSwitcher } from "@/components/shared/language-switcher";
 
-export function ShopTopBar() {
+export async function ShopTopBar() {
+  const settings = await getStoreSettings();
   return (
     <header className="sticky top-0 z-30 border-b border-border/70 bg-background safe-pt">
       <div className="mx-auto flex max-w-md items-center justify-between gap-3 px-4 py-3">
-        <Link href="/" className="text-lg font-semibold tracking-tight">
-          {APP_NAME}
+        <Link href="/">
+          <Brand
+            businessName={settings.businessName}
+            logoUrl={settings.logoUrl}
+            textClassName="text-lg"
+          />
         </Link>
         <div className="flex items-center gap-2">
           <LanguageSwitcher />

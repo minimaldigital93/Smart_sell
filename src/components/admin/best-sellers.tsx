@@ -1,10 +1,12 @@
 import Image from "next/image";
 import Link from "next/link";
 import { formatPrice } from "@/lib/utils";
+import { getStoreSettings } from "@/services/settings";
 import { EmptyState } from "@/components/shop/empty-state";
 import type { BestSeller } from "@/services/admin";
 
-export function BestSellersList({ products }: { products: BestSeller[] }) {
+export async function BestSellersList({ products }: { products: BestSeller[] }) {
+  const { currency } = await getStoreSettings();
   return (
     <section className="rounded-2xl border border-border bg-card p-5 shadow-soft">
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
@@ -42,7 +44,7 @@ export function BestSellersList({ products }: { products: BestSeller[] }) {
                   {p.name}
                 </Link>
                 <p className="text-xs text-muted-foreground">
-                  {p.total_sold} sold · {formatPrice(p.total_revenue)}
+                  {p.total_sold} sold · {formatPrice(p.total_revenue, currency)}
                 </p>
               </div>
             </li>

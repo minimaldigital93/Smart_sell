@@ -6,7 +6,7 @@ import {
   MAX_POINTS_REDEMPTION_RATIO,
   POINTS_PER_DOLLAR_CREDIT,
 } from "@/lib/loyalty/constants";
-import { formatPrice } from "@/lib/utils";
+import { useFormatPrice } from "@/lib/settings/store-config";
 
 export type AppliedPoints = {
   points: number;
@@ -22,6 +22,7 @@ export function PointsField({
   subtotal: number;
   onChange: (applied: AppliedPoints | null) => void;
 }) {
+  const formatPrice = useFormatPrice();
   const maxDiscount = Number((subtotal * MAX_POINTS_REDEMPTION_RATIO).toFixed(2));
   const maxAffordablePoints = Math.floor(maxDiscount * POINTS_PER_DOLLAR_CREDIT);
   const maxUsable = Math.min(balance, maxAffordablePoints);

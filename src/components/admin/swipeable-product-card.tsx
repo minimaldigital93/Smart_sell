@@ -7,7 +7,8 @@ import { Trash2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import type { Product } from "@/types";
 import { CATEGORIES } from "@/lib/constants";
-import { formatPrice, cn } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { useFormatPrice } from "@/lib/settings/store-config";
 import {
   hardDeleteProductAction,
   restoreProductAction,
@@ -23,6 +24,7 @@ const SWIPE_TRIGGER = 8;
 
 export function SwipeableProductCard({ product }: { product: Product }) {
   const router = useRouter();
+  const formatPrice = useFormatPrice();
   const [offset, setOffset] = useState(0);
   const [open, setOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);

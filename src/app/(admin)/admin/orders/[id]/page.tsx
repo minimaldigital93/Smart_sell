@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Printer, Phone, MapPin, BadgeCheck } from "lucide-react";
 import { getOrderForAdmin } from "@/services/orders-admin";
 import { formatPrice, cn } from "@/lib/utils";
+import { getStoreSettings } from "@/services/settings";
 import { buttonVariants } from "@/components/ui/button";
 import { OrderStatusBadge } from "@/components/admin/order-status-badge";
 import { OrderStatusControl } from "@/components/admin/orders/order-status-control";
@@ -24,6 +25,7 @@ export default async function AdminOrderDetailPage({
   const data = await getOrderForAdmin(id);
   if (!data) notFound();
   const { order, items } = data;
+  const { currency } = await getStoreSettings();
   const receiptUrl = await getSignedStorageUrl(
     "payment-proofs",
     order.payment_image,
@@ -87,16 +89,16 @@ export default async function AdminOrderDetailPage({
                   <span className="text-muted-foreground">× {i.quantity}</span>
                 </span>
                 <span className="font-medium tabular-nums">
-                  {formatPrice(i.price * i.quantity)}
+                  {formatPrice(i.price * i.quantity, currency)}
                 </span>
               </li>
             ))}
           </ul>
           <hr className="my-4 border-border" />
           <dl className="flex flex-col gap-2 text-sm">
-            <Row label="Subtotal" value={formatPrice(order.subtotal)} />
-            <Row label="Shipping" value={formatPrice(order.shipping_fee)} />
-            <Row label="Total" value={formatPrice(order.total)} bold />
+            <Row label="Subtotal" value={formatPrice(order.subtotal, currency)} />
+            <Row label="Shipping" value={formatPrice(order.shipping_fee, currency)} />
+            <Row label="Total" value={formatPrice(order.total, currency)} bold />
           </dl>
         </section>
 
@@ -110,9 +112,13 @@ export default async function AdminOrderDetailPage({
 
           <div className="rounded-2xl border border-border bg-card p-5 shadow-soft">
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-              Move to
+              {isCounterSale ? "Actions" : "Move to"}
             </h2>
-            <OrderStatusControl orderId={order.id} current={order.status} />
+            <OrderStatusControl
+              orderId={order.id}
+              current={order.status}
+              counterSale={isCounterSale}
+            />
             {order.status === "pending" ? (
               <p className="mt-3 text-xs text-muted-foreground">
                 Processing the order also decrements inventory automatically.

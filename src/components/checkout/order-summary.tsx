@@ -1,9 +1,10 @@
 "use client";
 
 import { useCartStore } from "@/store/cart-store";
-import { formatPrice } from "@/lib/utils";
+import { useFormatPrice } from "@/lib/settings/store-config";
 
 export function OrderSummary() {
+  const formatPrice = useFormatPrice();
   const items = useCartStore((s) => s.items);
 
   if (items.length === 0) return null;

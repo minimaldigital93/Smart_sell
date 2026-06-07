@@ -5,15 +5,21 @@ import { Suspense, useState } from "react";
 import { Toaster } from "sonner";
 import { I18nProvider } from "@/lib/i18n/provider";
 import type { Locale } from "@/lib/i18n/types";
+import {
+  StoreConfigProvider,
+  type StoreConfig,
+} from "@/lib/settings/store-config";
 import { StoreHydrator } from "@/components/shared/store-hydrator";
 import { RouteLoader } from "@/components/shared/route-loader";
 
 export function Providers({
   children,
   initialLocale,
+  storeConfig,
 }: {
   children: React.ReactNode;
   initialLocale: Locale;
+  storeConfig: StoreConfig;
 }) {
   const [client] = useState(
     () =>
@@ -30,7 +36,11 @@ export function Providers({
       <Suspense fallback={null}>
         <RouteLoader />
       </Suspense>
-      <I18nProvider initialLocale={initialLocale}>{children}</I18nProvider>
+      <I18nProvider initialLocale={initialLocale}>
+        <StoreConfigProvider config={storeConfig}>
+          {children}
+        </StoreConfigProvider>
+      </I18nProvider>
       <Toaster
         position="top-center"
         richColors

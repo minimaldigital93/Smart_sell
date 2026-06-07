@@ -7,6 +7,7 @@ import {
   getSalesByDay,
 } from "@/services/admin";
 import { formatPrice } from "@/lib/utils";
+import { getStoreSettings } from "@/services/settings";
 import { KpiCard } from "@/components/admin/kpi-card";
 import { SalesChart } from "@/components/admin/sales-chart";
 import { RecentOrders } from "@/components/admin/recent-orders";
@@ -16,13 +17,15 @@ import { LowStockList } from "@/components/admin/low-stock";
 export const dynamic = "force-dynamic";
 
 export default async function AdminDashboardPage() {
-  const [summary, salesByDay, bestSellers, recent, lowStock] = await Promise.all([
-    getDashboardSummary(),
-    getSalesByDay(14),
-    getBestSellers(5),
-    getRecentOrders(8),
-    getLowStock(5),
-  ]);
+  const [summary, salesByDay, bestSellers, recent, lowStock, { currency }] =
+    await Promise.all([
+      getDashboardSummary(),
+      getSalesByDay(14),
+      getBestSellers(5),
+      getRecentOrders(8),
+      getLowStock(5),
+      getStoreSettings(),
+    ]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -36,7 +39,7 @@ export default async function AdminDashboardPage() {
       <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <KpiCard
           label="Revenue"
-          value={formatPrice(summary.total_revenue)}
+          value={formatPrice(summary.total_revenue, currency)}
           hint={`${summary.total_orders} total orders`}
           icon={<DollarSign className="h-4 w-4" />}
         />

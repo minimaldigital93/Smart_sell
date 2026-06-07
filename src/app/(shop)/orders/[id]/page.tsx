@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { getOrderById } from "@/services/orders";
 import { requireUser } from "@/lib/auth/session";
 import { formatPrice } from "@/lib/utils";
+import { getStoreSettings } from "@/services/settings";
 import { PAYMENT_INSTRUCTIONS } from "@/lib/checkout/payment-instructions";
 import { ClientDate } from "@/components/shared/client-date";
 import { getSignedStorageUrl } from "@/lib/storage/signed-url";
@@ -33,6 +34,7 @@ export default async function OrderDetailPage({ params }: { params: Params }) {
   const data = await getOrderById(id);
   if (!data) notFound();
   const { order, items } = data;
+  const { currency } = await getStoreSettings();
   const receiptUrl = await getSignedStorageUrl(
     "payment-proofs",
     order.payment_image,
@@ -100,16 +102,16 @@ export default async function OrderDetailPage({ params }: { params: Params }) {
                 <span className="text-muted-foreground">× {i.quantity}</span>
               </span>
               <span className="font-medium tabular-nums">
-                {formatPrice(i.price * i.quantity)}
+                {formatPrice(i.price * i.quantity, currency)}
               </span>
             </li>
           ))}
         </ul>
         <hr className="my-4 border-border" />
         <dl className="flex flex-col gap-2 text-sm">
-          <Row label="Subtotal" value={formatPrice(order.subtotal)} />
-          <Row label="Shipping" value={formatPrice(order.shipping_fee)} />
-          <Row label="Total" value={formatPrice(order.total)} bold />
+          <Row label="Subtotal" value={formatPrice(order.subtotal, currency)} />
+          <Row label="Shipping" value={formatPrice(order.shipping_fee, currency)} />
+          <Row label="Total" value={formatPrice(order.total, currency)} bold />
         </dl>
       </section>
 

@@ -1,26 +1,52 @@
 import Link from "next/link";
-import { requireUser, getCurrentProfile } from "@/lib/auth/session";
+import { getCurrentProfile } from "@/lib/auth/session";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { getLoyaltyBalance, getLoyaltyHistory } from "@/services/loyalty";
 import { formatPrice } from "@/lib/utils";
+import { getStoreSettings } from "@/services/settings";
 import { POINTS_PER_DOLLAR_CREDIT } from "@/lib/loyalty/constants";
 import type { LoyaltyTransaction } from "@/types";
 
 type SearchParams = Promise<{ reset?: string }>;
 
 export default async function AccountPage(props: { searchParams: SearchParams }) {
-  await requireUser("/account");
   const session = await getCurrentProfile();
   const sp = await props.searchParams;
 
   if (!session) {
-    return null; // requireUser already redirected
+    // Render a sign-in prompt inside the shop layout so the bottom nav stays
+    // visible and the user can still reach Home / Cart.
+    return (
+      <div className="flex flex-col gap-6 pt-2">
+        <header>
+          <h1 className="text-2xl font-semibold tracking-tight">Account</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Sign in to view your profile, orders and loyalty points.
+          </p>
+        </header>
+        <section className="flex flex-col gap-3">
+          <Link
+            href="/login?redirectTo=/account"
+            className="rounded-2xl bg-primary px-5 py-4 text-center text-sm font-medium text-primary-foreground shadow-soft hover:opacity-90"
+          >
+            Sign in
+          </Link>
+          <Link
+            href="/register"
+            className="rounded-2xl border border-border bg-card px-5 py-4 text-center text-sm font-medium shadow-soft hover:bg-muted"
+          >
+            Create an account
+          </Link>
+        </section>
+      </div>
+    );
   }
   const { user, profile } = session;
 
-  const [loyaltyPoints, loyaltyHistory] = await Promise.all([
+  const [loyaltyPoints, loyaltyHistory, { currency }] = await Promise.all([
     getLoyaltyBalance(profile.id),
     getLoyaltyHistory(profile.id, 10),
+    getStoreSettings(),
   ]);
 
   return (
@@ -58,7 +84,7 @@ export default async function AccountPage(props: { searchParams: SearchParams })
           </span>
         </div>
         <p className="mb-4 text-xs text-muted-foreground">
-          Earn 1 pt per {formatPrice(1)} spent · {POINTS_PER_DOLLAR_CREDIT} pts = {formatPrice(1)} off at checkout
+          Earn 1 pt per {formatPrice(1, currency)} spent · {POINTS_PER_DOLLAR_CREDIT} pts = {formatPrice(1, currency)} off at checkout
         </p>
 
         {loyaltyHistory.length > 0 ? (
@@ -82,7 +108,7 @@ export default async function AccountPage(props: { searchParams: SearchParams })
           My orders
         </Link>
         <Link
-          href="/reset-password"
+          href="/reset-password/update"
           className="rounded-2xl border border-border bg-card px-5 py-4 text-sm font-medium shadow-soft hover:bg-muted"
         >
           Change password

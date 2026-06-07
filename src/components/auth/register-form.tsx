@@ -29,13 +29,14 @@ export function RegisterForm() {
         <Input id="name" name="name" autoComplete="name" required />
       </div>
       <div>
-        <Label htmlFor="email">Email</Label>
+        <Label htmlFor="phone">Phone number</Label>
         <Input
-          id="email"
-          name="email"
-          type="email"
-          autoComplete="email"
-          inputMode="email"
+          id="phone"
+          name="phone"
+          type="tel"
+          autoComplete="tel"
+          inputMode="tel"
+          placeholder="012 345 678"
           required
         />
       </div>

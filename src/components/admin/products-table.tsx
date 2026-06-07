@@ -4,6 +4,7 @@ import { Pencil } from "lucide-react";
 import type { Product } from "@/types";
 import { CATEGORIES } from "@/lib/constants";
 import { formatPrice } from "@/lib/utils";
+import { getStoreSettings } from "@/services/settings";
 import { EmptyState } from "@/components/shop/empty-state";
 import { SwipeableProductCard } from "@/components/admin/swipeable-product-card";
 
@@ -11,7 +12,8 @@ function categoryLabel(slug: string) {
   return CATEGORIES.find((c) => c.slug === slug)?.label ?? slug;
 }
 
-export function ProductsTable({ products }: { products: Product[] }) {
+export async function ProductsTable({ products }: { products: Product[] }) {
+  const { currency } = await getStoreSettings();
   if (products.length === 0) {
     return (
       <EmptyState
@@ -65,11 +67,11 @@ export function ProductsTable({ products }: { products: Product[] }) {
                 </td>
                 <td className="px-3 py-3 text-right tabular-nums">
                   <span className="font-medium">
-                    {formatPrice(p.discount_price ?? p.price)}
+                    {formatPrice(p.discount_price ?? p.price, currency)}
                   </span>
                   {p.discount_price ? (
                     <span className="ml-1 text-xs text-muted-foreground line-through">
-                      {formatPrice(p.price)}
+                      {formatPrice(p.price, currency)}
                     </span>
                   ) : null}
                 </td>

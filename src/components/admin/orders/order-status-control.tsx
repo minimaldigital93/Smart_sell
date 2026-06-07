@@ -16,18 +16,29 @@ import { Button } from "@/components/ui/button";
 export function OrderStatusControl({
   orderId,
   current,
+  counterSale = false,
 }: {
   orderId: string;
   current: OrderStatusEnum;
+  /**
+   * In-store counter sales are complete the moment they're rung up — they never
+   * go through the prepare → ship → deliver pipeline. The only meaningful action
+   * left is voiding the sale (which restocks), so hide the fulfilment steps.
+   */
+  counterSale?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const nextStates = ALLOWED_TRANSITIONS[current];
+  const nextStates = counterSale
+    ? ALLOWED_TRANSITIONS[current].filter((s) => s === "cancelled")
+    : ALLOWED_TRANSITIONS[current];
 
   if (nextStates.length === 0) {
     return (
       <div className="rounded-2xl border border-border bg-muted/40 p-4 text-center text-sm text-muted-foreground">
-        Order is in a terminal state ({STATUS_LABEL[current]}).
+        {counterSale
+          ? "Counter sale complete — no further action needed."
+          : `Order is in a terminal state (${STATUS_LABEL[current]}).`}
       </div>
     );
   }
@@ -67,7 +78,7 @@ export function OrderStatusControl({
           ) : (
             <Check className="h-4 w-4" />
           )}
-          {TRANSITION_VERB[s]}
+          {s === "cancelled" && counterSale ? "Void sale" : TRANSITION_VERB[s]}
         </Button>
       ))}
     </div>

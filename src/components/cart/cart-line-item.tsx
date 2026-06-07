@@ -4,10 +4,11 @@ import Image from "next/image";
 import { Trash2 } from "lucide-react";
 import type { CartItem } from "@/types";
 import { useCartStore } from "@/store/cart-store";
-import { formatPrice } from "@/lib/utils";
+import { useFormatPrice } from "@/lib/settings/store-config";
 import { QuantityStepper } from "@/components/shop/quantity-stepper";
 
 export function CartLineItem({ item }: { item: CartItem }) {
+  const formatPrice = useFormatPrice();
   const setQuantity = useCartStore((s) => s.setQuantity);
   const remove = useCartStore((s) => s.remove);
 

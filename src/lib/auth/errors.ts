@@ -8,11 +8,13 @@ export function humanizeAuthError(error: AuthError | Error | null): string {
   if (!error) return "Something went wrong. Please try again.";
   const msg = error.message?.toLowerCase() ?? "";
 
-  if (msg.includes("invalid login credentials")) return "Wrong email or password.";
-  if (msg.includes("email not confirmed"))
-    return "Confirm your email — check your inbox for a verification link.";
-  if (msg.includes("user already registered"))
-    return "An account with that email already exists.";
+  if (msg.includes("invalid login credentials"))
+    return "Wrong phone number or password.";
+  if (
+    msg.includes("user already registered") ||
+    msg.includes("already been registered")
+  )
+    return "An account with that phone number already exists.";
   if (msg.includes("password should be"))
     return "Password must be at least 8 characters.";
   if (msg.includes("rate limit") || msg.includes("too many"))

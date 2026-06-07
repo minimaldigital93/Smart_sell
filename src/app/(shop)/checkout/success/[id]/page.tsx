@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { CheckCircle2 } from "lucide-react";
 import { getOrderById } from "@/services/orders";
 import { formatPrice } from "@/lib/utils";
+import { getStoreSettings } from "@/services/settings";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ClearCartOnMount } from "@/components/cart/clear-cart-on-mount";
@@ -17,6 +18,7 @@ export default async function OrderSuccessPage({ params }: { params: Params }) {
   const data = await getOrderById(id);
   if (!data) notFound();
   const { order, items } = data;
+  const { currency } = await getStoreSettings();
 
   return (
     <div className="flex flex-col gap-6 pt-2">
@@ -49,7 +51,7 @@ export default async function OrderSuccessPage({ params }: { params: Params }) {
                 <span className="text-muted-foreground">× {i.quantity}</span>
               </span>
               <span className="font-medium tabular-nums">
-                {formatPrice(i.price * i.quantity)}
+                {formatPrice(i.price * i.quantity, currency)}
               </span>
             </li>
           ))}
@@ -57,8 +59,8 @@ export default async function OrderSuccessPage({ params }: { params: Params }) {
 
         <hr className="my-4 border-border" />
         <dl className="flex flex-col gap-2 text-sm">
-          <Row label="Subtotal" value={formatPrice(order.subtotal)} />
-          <Row label="Shipping" value={formatPrice(order.shipping_fee)} />
+          <Row label="Subtotal" value={formatPrice(order.subtotal, currency)} />
+          <Row label="Shipping" value={formatPrice(order.shipping_fee, currency)} />
           {(() => {
             // order.discount folds coupon + points cash value into one number.
             // Split it back out so the customer sees exactly what was applied.
@@ -77,19 +79,19 @@ export default async function OrderSuccessPage({ params }: { params: Params }) {
                         ? `Discount (${order.coupon_code})`
                         : "Discount"
                     }
-                    value={`−${formatPrice(couponCash)}`}
+                    value={`−${formatPrice(couponCash, currency)}`}
                   />
                 ) : null}
                 {pointsCash > 0 ? (
                   <Row
                     label={`Points (${order.points_redeemed} pts)`}
-                    value={`−${formatPrice(pointsCash)}`}
+                    value={`−${formatPrice(pointsCash, currency)}`}
                   />
                 ) : null}
               </>
             );
           })()}
-          <Row label="Total" value={formatPrice(order.total)} bold />
+          <Row label="Total" value={formatPrice(order.total, currency)} bold />
         </dl>
       </section>
 

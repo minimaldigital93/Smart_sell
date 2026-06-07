@@ -15,7 +15,7 @@ import { applyMovementAction } from "@/app/actions/inventory";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { formatPrice } from "@/lib/utils";
+import { useFormatPrice } from "@/lib/settings/store-config";
 
 type Mode = "in" | "out" | "lookup";
 
@@ -168,6 +168,7 @@ function FoundCard({
   onConfirm: () => void;
   confirming: boolean;
 }) {
+  const formatPrice = useFormatPrice();
   const cover = found.product.images[0] ?? null;
   const stock = found.inventory.current_stock;
   const meta = MODE_META[mode];

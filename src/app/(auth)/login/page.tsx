@@ -4,7 +4,7 @@ import { LoginForm } from "@/components/auth/login-form";
 
 type SearchParams = Promise<{
   redirectTo?: string;
-  confirm?: string;
+  registered?: string;
   error?: string;
 }>;
 
@@ -25,9 +25,9 @@ export default async function LoginPage(props: { searchParams: SearchParams }) {
         </span>
       }
     >
-      {sp.confirm ? (
+      {sp.registered ? (
         <p className="mb-4 rounded-xl bg-accent px-4 py-3 text-sm text-accent-foreground">
-          Check your inbox to confirm your email, then sign in.
+          Account created. Sign in with your phone number and password.
         </p>
       ) : null}
       {sp.error === "callback" ? (
@@ -36,14 +36,6 @@ export default async function LoginPage(props: { searchParams: SearchParams }) {
         </p>
       ) : null}
       <LoginForm redirectTo={redirectTo} />
-      <p className="mt-4 text-center text-sm">
-        <Link
-          href="/reset-password"
-          className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-        >
-          Forgot password?
-        </Link>
-      </p>
     </AuthCard>
   );
 }

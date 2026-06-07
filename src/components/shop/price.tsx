@@ -1,5 +1,7 @@
-import { cn } from "@/lib/utils";
-import { formatPrice, discountPercent } from "@/lib/utils";
+"use client";
+
+import { cn, discountPercent } from "@/lib/utils";
+import { useFormatPrice } from "@/lib/settings/store-config";
 
 export function Price({
   price,
@@ -15,6 +17,7 @@ export function Price({
   className?: string;
 }) {
   // Postgres numeric is serialized as string; coerce before comparing.
+  const formatPrice = useFormatPrice();
   const p = Number(price);
   const d = discount == null || discount === "" ? null : Number(discount);
   const hasDiscount = d != null && Number.isFinite(d) && d > 0 && d < p;

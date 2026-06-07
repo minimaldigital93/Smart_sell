@@ -11,7 +11,7 @@ import { submitCounterSaleAction } from "@/app/actions/pos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { formatPrice } from "@/lib/utils";
+import { useFormatPrice } from "@/lib/settings/store-config";
 import {
   PAYMENT_METHODS,
   type PaymentMethod,
@@ -30,6 +30,7 @@ type CartLine = {
 
 export function PosFlow() {
   const router = useRouter();
+  const formatPrice = useFormatPrice();
   const [scanning, setScanning] = useState(false);
   const [lines, setLines] = useState<CartLine[]>([]);
   const [payment, setPayment] = useState<PaymentMethod>("cash");
