@@ -10,7 +10,13 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
-export type UserRoleEnum = "admin" | "staff" | "customer";
+export type UserRoleEnum = "superadmin" | "admin" | "staff" | "customer";
+export type StoreStatusEnum =
+  | "trial"
+  | "active"
+  | "grace"
+  | "locked"
+  | "cancelled";
 export type ProductCategoryEnum =
   | "skincare"
   | "makeup"
@@ -42,6 +48,7 @@ export type Database = {
           name: string | null;
           email: string | null;
           phone: string | null;
+          store_id: string | null;
           loyalty_points: number;
           created_at: Timestamp;
           updated_at: Timestamp;
@@ -52,9 +59,47 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["profiles"]["Row"]>;
         Relationships: [];
       };
+      stores: {
+        Row: {
+          id: string;
+          slug: string;
+          name: string;
+          owner_id: string | null;
+          custom_domain: string | null;
+          domain_verified: boolean;
+          status: StoreStatusEnum;
+          plan_id: string | null;
+          trial_ends_at: Timestamp | null;
+          current_period_end: Timestamp | null;
+          created_at: Timestamp;
+          updated_at: Timestamp;
+        };
+        Insert: {
+          id?: string;
+          slug: string;
+          name: string;
+          owner_id?: string | null;
+          custom_domain?: string | null;
+          domain_verified?: boolean;
+          status?: StoreStatusEnum;
+          plan_id?: string | null;
+          trial_ends_at?: Timestamp | null;
+          current_period_end?: Timestamp | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["stores"]["Row"]>;
+        Relationships: [
+          {
+            foreignKeyName: "stores_owner_id_fkey";
+            columns: ["owner_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       products: {
         Row: {
           id: string;
+          store_id: string;
           name: string;
           slug: string;
           description: string | null;
@@ -75,14 +120,15 @@ export type Database = {
         };
         Insert: Omit<
           Database["public"]["Tables"]["products"]["Row"],
-          "id" | "created_at" | "updated_at" | "stock"
-        > & { id?: string; stock?: number };
+          "id" | "created_at" | "updated_at" | "stock" | "store_id"
+        > & { id?: string; stock?: number; store_id?: string };
         Update: Partial<Database["public"]["Tables"]["products"]["Row"]>;
         Relationships: [];
       };
       product_inventory: {
         Row: {
           id: string;
+          store_id: string;
           product_id: string;
           current_stock: number;
           minimum_stock: number;
@@ -92,8 +138,8 @@ export type Database = {
         };
         Insert: Omit<
           Database["public"]["Tables"]["product_inventory"]["Row"],
-          "id" | "updated_at"
-        > & { id?: string };
+          "id" | "updated_at" | "store_id"
+        > & { id?: string; store_id?: string };
         Update: Partial<
           Database["public"]["Tables"]["product_inventory"]["Row"]
         >;
@@ -109,6 +155,7 @@ export type Database = {
       orders: {
         Row: {
           id: string;
+          store_id: string;
           user_id: string | null;
           customer_name: string;
           phone: string;
@@ -131,6 +178,7 @@ export type Database = {
         Insert: Omit<
           Database["public"]["Tables"]["orders"]["Row"],
           | "id"
+          | "store_id"
           | "created_at"
           | "updated_at"
           | "status"
@@ -141,6 +189,7 @@ export type Database = {
           | "points_redeemed"
         > & {
           id?: string;
+          store_id?: string;
           status?: OrderStatusEnum;
           discount?: number;
           coupon_id?: string | null;
@@ -153,6 +202,7 @@ export type Database = {
       coupons: {
         Row: {
           id: string;
+          store_id: string;
           code: string;
           discount_type: "percent" | "fixed";
           discount_value: number;
@@ -167,14 +217,15 @@ export type Database = {
         };
         Insert: Omit<
           Database["public"]["Tables"]["coupons"]["Row"],
-          "id" | "created_at" | "updated_at" | "redeemed_count"
-        > & { id?: string; redeemed_count?: number };
+          "id" | "created_at" | "updated_at" | "redeemed_count" | "store_id"
+        > & { id?: string; redeemed_count?: number; store_id?: string };
         Update: Partial<Database["public"]["Tables"]["coupons"]["Row"]>;
         Relationships: [];
       };
       order_items: {
         Row: {
           id: string;
+          store_id: string;
           order_id: string;
           product_id: string;
           product_name: string;
@@ -184,8 +235,8 @@ export type Database = {
         };
         Insert: Omit<
           Database["public"]["Tables"]["order_items"]["Row"],
-          "id" | "created_at"
-        > & { id?: string };
+          "id" | "created_at" | "store_id"
+        > & { id?: string; store_id?: string };
         Update: Partial<Database["public"]["Tables"]["order_items"]["Row"]>;
         Relationships: [
           {
@@ -205,6 +256,7 @@ export type Database = {
       inventory_movements: {
         Row: {
           id: string;
+          store_id: string;
           product_id: string;
           barcode: string | null;
           movement_type: MovementTypeEnum;
@@ -218,8 +270,8 @@ export type Database = {
         };
         Insert: Omit<
           Database["public"]["Tables"]["inventory_movements"]["Row"],
-          "id" | "created_at"
-        > & { id?: string };
+          "id" | "created_at" | "store_id"
+        > & { id?: string; store_id?: string };
         Update: Partial<
           Database["public"]["Tables"]["inventory_movements"]["Row"]
         >;
@@ -228,6 +280,7 @@ export type Database = {
       notifications: {
         Row: {
           id: string;
+          store_id: string | null;
           user_id: string | null;
           title: string;
           message: string;
@@ -239,14 +292,20 @@ export type Database = {
         };
         Insert: Omit<
           Database["public"]["Tables"]["notifications"]["Row"],
-          "id" | "created_at" | "metadata" | "read_at"
-        > & { id?: string; metadata?: Json; read_at?: Timestamp | null };
+          "id" | "created_at" | "metadata" | "read_at" | "store_id"
+        > & {
+          id?: string;
+          metadata?: Json;
+          read_at?: Timestamp | null;
+          store_id?: string | null;
+        };
         Update: Partial<Database["public"]["Tables"]["notifications"]["Row"]>;
         Relationships: [];
       };
       loyalty_transactions: {
         Row: {
           id: string;
+          store_id: string;
           user_id: string;
           order_id: string | null;
           type: LoyaltyTransactionTypeEnum;
@@ -257,14 +316,15 @@ export type Database = {
         };
         Insert: Omit<
           Database["public"]["Tables"]["loyalty_transactions"]["Row"],
-          "id" | "created_at"
-        > & { id?: string };
+          "id" | "created_at" | "store_id"
+        > & { id?: string; store_id?: string };
         Update: Partial<Database["public"]["Tables"]["loyalty_transactions"]["Row"]>;
         Relationships: [];
       };
       store_settings: {
         Row: {
-          id: number;
+          id: number | null;
+          store_id: string;
           business_name: string;
           tagline: string;
           logo_url: string | null;
@@ -281,11 +341,187 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["store_settings"]["Row"]>;
         Relationships: [];
       };
+      subscription_plans: {
+        Row: {
+          id: string;
+          code: string;
+          name: string;
+          price_usd: number;
+          interval: "month" | "year";
+          features: Json;
+          limits: Json;
+          sort: number;
+          is_active: boolean;
+          created_at: Timestamp;
+          updated_at: Timestamp;
+        };
+        Insert: {
+          id?: string;
+          code: string;
+          name: string;
+          price_usd: number;
+          interval?: "month" | "year";
+          features?: Json;
+          limits?: Json;
+          sort?: number;
+          is_active?: boolean;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["subscription_plans"]["Row"]
+        >;
+        Relationships: [];
+      };
+      subscriptions: {
+        Row: {
+          id: string;
+          store_id: string;
+          plan_id: string | null;
+          status: "trialing" | "active" | "past_due" | "canceled";
+          current_period_start: Timestamp | null;
+          current_period_end: Timestamp | null;
+          trial_ends_at: Timestamp | null;
+          cancel_at: Timestamp | null;
+          created_at: Timestamp;
+          updated_at: Timestamp;
+        };
+        Insert: {
+          id?: string;
+          store_id: string;
+          plan_id?: string | null;
+          status?: "trialing" | "active" | "past_due" | "canceled";
+          current_period_start?: Timestamp | null;
+          current_period_end?: Timestamp | null;
+          trial_ends_at?: Timestamp | null;
+          cancel_at?: Timestamp | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["subscriptions"]["Row"]>;
+        Relationships: [
+          {
+            foreignKeyName: "subscriptions_store_id_fkey";
+            columns: ["store_id"];
+            referencedRelation: "stores";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      subscription_payments: {
+        Row: {
+          id: string;
+          store_id: string;
+          plan_id: string | null;
+          amount_usd: number;
+          method: "khqr" | "manual";
+          bill_number: string | null;
+          bakong_md5: string | null;
+          bakong_txn_ref: string | null;
+          status: "pending" | "paid" | "failed" | "expired";
+          proof_url: string | null;
+          paid_at: Timestamp | null;
+          created_at: Timestamp;
+          updated_at: Timestamp;
+        };
+        Insert: {
+          id?: string;
+          store_id: string;
+          plan_id?: string | null;
+          amount_usd: number;
+          method?: "khqr" | "manual";
+          bill_number?: string | null;
+          bakong_md5?: string | null;
+          bakong_txn_ref?: string | null;
+          status?: "pending" | "paid" | "failed" | "expired";
+          proof_url?: string | null;
+          paid_at?: Timestamp | null;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["subscription_payments"]["Row"]
+        >;
+        Relationships: [
+          {
+            foreignKeyName: "subscription_payments_store_id_fkey";
+            columns: ["store_id"];
+            referencedRelation: "stores";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      platform_expenses: {
+        Row: {
+          id: string;
+          category: "hosting" | "server" | "other";
+          label: string;
+          amount_usd: number;
+          incurred_on: string;
+          note: string | null;
+          created_by: string | null;
+          created_at: Timestamp;
+        };
+        Insert: {
+          id?: string;
+          category?: "hosting" | "server" | "other";
+          label: string;
+          amount_usd: number;
+          incurred_on?: string;
+          note?: string | null;
+          created_by?: string | null;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["platform_expenses"]["Row"]
+        >;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
       is_admin: { Args: Record<string, never>; Returns: boolean };
       is_staff: { Args: Record<string, never>; Returns: boolean };
+      is_superadmin: { Args: Record<string, never>; Returns: boolean };
+      current_store_id: { Args: Record<string, never>; Returns: string | null };
+      default_store_id: { Args: Record<string, never>; Returns: string };
+      store_access_status: { Args: { p_store: string }; Returns: StoreStatusEnum };
+      resolve_store: {
+        Args: { p_host: string | null; p_slug: string | null };
+        Returns: { id: string; slug: string; status: StoreStatusEnum }[];
+      };
+      start_store_trial: {
+        Args: { p_store: string; p_plan_code: string };
+        Returns: null;
+      };
+      activate_subscription: {
+        Args: { p_payment: string };
+        Returns: Timestamp;
+      };
+      platform_pnl_monthly: {
+        Args: { p_year: number };
+        Returns: {
+          month: number;
+          revenue: number;
+          expense: number;
+          net: number;
+        }[];
+      };
+      platform_pnl_yearly: {
+        Args: Record<string, never>;
+        Returns: {
+          year: number;
+          revenue: number;
+          expense: number;
+          net: number;
+        }[];
+      };
+      platform_summary: {
+        Args: Record<string, never>;
+        Returns: {
+          mrr: number;
+          active_stores: number;
+          trial_stores: number;
+          overdue_stores: number;
+          total_revenue: number;
+          total_expense: number;
+          month_revenue: number;
+          month_expense: number;
+        }[];
+      };
       apply_inventory_movement: {
         Args: {
           p_product_id: string;
@@ -331,6 +567,7 @@ export type Database = {
           p_items: { product_id: string; quantity: number }[];
           p_coupon_code?: string | null;
           p_points?: number;
+          p_store_id?: string | null;
         };
         Returns: { order_id: string; total: number };
       };

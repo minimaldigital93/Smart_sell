@@ -1,13 +1,15 @@
 import { requireAdmin } from "@/lib/auth/session";
 import { getStoreSettings } from "@/services/settings";
+import { getMyStore } from "@/services/stores";
 import { SettingsForm } from "@/components/admin/settings/settings-form";
+import { CustomDomain } from "@/components/settings/custom-domain";
 
 export const metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
   // Settings are admin-only to edit (staff can see the rest of admin).
   await requireAdmin();
-  const settings = await getStoreSettings();
+  const [settings, store] = await Promise.all([getStoreSettings(), getMyStore()]);
 
   return (
     <div className="space-y-6">
@@ -18,6 +20,10 @@ export default async function SettingsPage() {
         </p>
       </header>
       <SettingsForm settings={settings} />
+      <CustomDomain
+        domain={store?.custom_domain ?? null}
+        verified={store?.domain_verified ?? false}
+      />
     </div>
   );
 }

@@ -30,13 +30,13 @@ The final application must feel:
 
 # PHASE PROGRESS
 
-Last updated: 2026-06-07 (phone-based auth, store settings + theme/branding, business-flow audit migrations 0022–0030). Status reflects code present in the repo, not necessarily QA-verified.
+Last updated: 2026-06-07 (multi-tenant SaaS transformation: platform `superadmin` role, per-store tenancy, subscription billing via Bakong KHQR, platform finance; migrations 0031–0040). Status reflects code present in the repo, not necessarily QA-verified.
 
 | Phase | Area | Status |
 |-------|------|--------|
 | 1 | Project Foundation (Next.js 15, TS, Tailwind, shadcn, Supabase, PWA, ESLint, Prettier) | ✅ Done |
 | 2 | Database Architecture (schema.sql, migrations/, policies/, seed/, tests/) | ✅ Done |
-| 3 | Authentication — phone + password (synthetic email `<digits>@phone.csms.app`, `lib/auth/phone.ts`); login, register, callback, sign-out, lib/auth. Reset-password page/form removed. | ✅ Done |
+| 3 | Authentication — phone + password (synthetic email `<digits>@phone.csms.app`, `lib/auth/phone.ts`); login, register, callback, sign-out, lib/auth. Reset-password page/form removed. Roles: superadmin, admin, staff, customer. | ✅ Done |
 | 4 | Public Storefront (shop, category, product, search, account, wishlist) | ✅ Done |
 | 5 | Cart + Checkout (cart, checkout, success page, KHQR upload) | ✅ Done |
 | 6 | Admin Dashboard (admin layout, dashboard, sidebar) | ✅ Done |
@@ -46,9 +46,10 @@ Last updated: 2026-06-07 (phone-based auth, store settings + theme/branding, bus
 | 10 | Order Management (admin/orders, print/orders/[id]) | ✅ Done |
 | 11 | Notifications (admin + shop notifications, components/notifications) | ✅ Done |
 | 12 | Security + Performance (lib/security, PWA manifest, offline page, sw.js) | ✅ Done |
-| 13 | Optional Advanced — done: coupons (admin CRUD + checkout redeem), wishlist, Khmer i18n, POS (cash payment method + admin/pos), Telegram helper (`lib/notifications/telegram.ts`, best-effort, env-gated), loyalty points (earn on delivered, redeem at checkout — `lib/loyalty`, `services/loyalty.ts`, `actions/loyalty.ts`, migration 0020), store settings + branding/theme (singleton `store_settings` table, admin/settings page, `lib/settings`, `services/settings.ts`, `actions/settings.ts`, 6 curated theme presets in `lib/theme/presets.ts`, `branding` storage bucket, migration 0028). Pending: supplier management, multi-store, expiration tracking, advanced analytics. | 🟡 Partial |
+| 13 | Optional Advanced — done: coupons (admin CRUD + checkout redeem), wishlist, Khmer i18n, POS (cash payment method + admin/pos), Telegram helper (`lib/notifications/telegram.ts`, best-effort, env-gated), loyalty points (earn on delivered, redeem at checkout — `lib/loyalty`, `services/loyalty.ts`, `actions/loyalty.ts`, migration 0020), store settings + branding/theme (per-store `store_settings`, admin/settings page, `lib/settings`, `services/settings.ts`, `actions/settings.ts`, 6 curated theme presets in `lib/theme/presets.ts`, `branding` storage bucket, migrations 0028/0035), **multi-store** (see Phase 14). Pending: supplier management, expiration tracking, advanced analytics. | 🟡 Partial |
+| 14 | **Multi-tenant SaaS Platform** — superadmin role + `stores` tenant root; per-store scoping on every table with per-store unique slug/sku/barcode/coupon; tenant-aware RLS + SECURITY DEFINER helpers; subscription billing (3 plans, Bakong KHQR or manual proof); store-owner onboarding (pay-first, no trial); custom domain / `/s/{slug}` routing; superadmin console (stores, subscriptions, plans, users, finance); platform finance (subscription revenue − platform expenses). Migrations 0033–0040. See **MULTI-TENANT SaaS PLATFORM** section. | ✅ Done |
 
-When asked to "continue", default to Phase 13 remaining items unless the user specifies otherwise.
+When asked to "continue", default to Phase 13 remaining items (supplier management, expiration tracking, advanced analytics) unless the user specifies otherwise.
 
 ---
 
@@ -156,10 +157,13 @@ Actual layout (rooted at `src/`, plus top-level `database/`):
 
 ```bash
 src/app/
-  (admin)/admin/         # dashboard, products, inventory, orders, scan, coupons, pos, notifications, settings
-  (auth)/                # login, register (phone + password; no reset-password)
+  (admin)/admin/         # dashboard, products, inventory, orders, scan, coupons, pos, notifications, settings, billing
+  (superadmin)/superadmin/ # platform console: stores (+[id]), subscriptions, plans, users, finance
+  (auth)/                # login, register, start (store-owner onboarding); phone + password, no reset-password
   (shop)/                # shop, category, product, search, cart, checkout, wishlist, account, orders, notifications
-  actions/               # server actions: auth, products, orders, inventory, scan, coupons, pos, loyalty, notifications, settings
+  store-unavailable/     # shown when a tenant store is locked/cancelled (billing lapsed)
+  actions/               # server actions: auth, products, orders, inventory, scan, coupons, pos, loyalty,
+                         #   notifications, settings, onboarding, subscriptions, superadmin, expenses, domain
   api/health/            # health check route
   auth/                  # supabase auth callback / sign-out
   print/orders/[id]/     # printable invoice
@@ -168,31 +172,44 @@ src/app/
 
 src/components/
   ui/                    # shadcn primitives
-  shared/                # cross-feature widgets
+  shared/                # cross-feature widgets (incl. brand.tsx, back-button.tsx)
   admin/                 # admin-shell, kpi-card, sales-chart, products/orders/inventory/scanner/coupons/pos/settings
+  superadmin/            # store-actions, payment-actions, user-role-select, pnl-table, expense-form/-delete
+  billing/               # billing-client, khqr-display, manual-proof-form (store subscription checkout)
+  settings/              # custom-domain (per-store custom domain config)
   shop/                  # product-card, gallery, cart, wishlist-view, search-bar, favorite-button
-  shared/                # incl. brand.tsx, back-button.tsx
-  auth/, cart/, checkout/, notifications/, inventory/
+  auth/                  # incl. start-store-form.tsx (onboarding)
+  cart/, checkout/, notifications/, inventory/
 
-src/lib/                 # auth (incl. phone.ts), supabase, products, orders, inventory, checkout, coupons, loyalty,
-                         #   settings, theme (presets.ts), i18n, notifications, security
-src/services/            # client/server data services per domain (incl. loyalty.ts, settings.ts)
+src/lib/                 # auth (incl. phone.ts), supabase (incl. proxy.ts = tenant-resolving middleware),
+                         #   products, orders, inventory, checkout, coupons, loyalty, settings, theme (presets.ts),
+                         #   i18n, notifications, security, constants.ts (store status, plan/grace constants)
+  tenant/                # resolve.ts (host/slug → store via resolve_store RPC), context.ts (per-request store
+                         #   headers), status.ts (effectiveStoreStatus mirror of SQL)
+  billing/               # plans.ts (plan codes starter/growth/pro, capability gates / limits)
+  bakong/                # config.ts (env-gated), khqr.ts (KHQR string), verify.ts (Bakong API check)
+src/services/            # per-domain data services: products(-admin), orders(-admin), inventory, coupons,
+                         #   loyalty, settings, admin, notifications, stores, subscriptions, platform
 src/hooks/  src/store/   # zustand + react-query glue
-src/types/  src/utils/
-src/proxy.ts             # supabase client proxy
+src/types/               # database.ts, index.ts, bakong-khqr.d.ts
+src/utils/
 
 database/
-  migrations/            # 0001..0030 (extensions, profiles, products+inventory, orders, movements,
-                         #   notifications, functions/triggers, RLS, realtime, ingredients,
-                         #   payment-proofs bucket, admin views, product-images bucket,
-                         #   notifications audience+triggers, coupons, movement barcode-proofs+bucket,
-                         #   payment_method='cash' for POS, loyalty points,
-                         #   drop ambiguous apply_inventory_movement overload (0021),
-                         #   allow adjustment-to-zero (0022), align sales view + restock-on-cancel (0023),
-                         #   order integrity + credit refunds (0024), private media buckets (0025),
-                         #   DB-backed rate limits (0026), lock payment-proofs upload (0027),
-                         #   store_settings + branding bucket (0028), phone-auth profile trigger (0029),
-                         #   reset users + seed admin (0030))
+  migrations/            # 0001..0040. Single-tenant base 0001..0032 (extensions, profiles, products+inventory,
+                         #   orders, movements, notifications, functions/triggers, RLS, realtime, ingredients,
+                         #   storage buckets, admin views, coupons, POS cash, loyalty, audit fixes 0021..0027,
+                         #   store_settings+branding 0028, phone-auth 0029, seed admin 0030,
+                         #   store shipping fee in checkout 0031, product marketing flags 0032).
+                         # Multi-tenant SaaS 0033..0040:
+                         #   0033 superadmin role + stores tenant root
+                         #   0034 store_id on every tenant table + per-store unique slug/sku/barcode/code
+                         #   0035 store_settings → per-store rows (auto-created per store)
+                         #   0036 seed superadmin (010552223 / 12345678)
+                         #   0037 billing: subscription_plans, store subscriptions, subscription_payments
+                         #   0038 tenant-aware RLS on every table (superadmin bypasses)
+                         #   0039 platform finance: platform_expenses + superadmin P&L rollups
+                         #   0040 tenant-aware SECURITY DEFINER helpers (handle_new_user,
+                         #        create_customer_order, apply_inventory_movement)
   policies/, seed/, tests/, _all_migrations.sql
 ```
 
@@ -271,7 +288,7 @@ Generate:
 
 # PHASE 3 — AUTHENTICATION SYSTEM
 
-Roles: admin, staff, customer
+Roles: superadmin (platform owner, store_id = NULL), admin (shop owner), staff, customer
 Auth method: phone number + password (no email, no SMS provider). Each phone is mapped to a stable synthetic email `<normalized-digits>@phone.csms.app` for Supabase password auth — sign-up and sign-in must normalize the number identically (see `lib/auth/phone.ts`). No password-reset flow (removed).
 Generate: Login, Register, Middleware, Route protection, Secure session handling
 
@@ -355,6 +372,74 @@ Performance: iPhone Safari, Lazy loading, Image optimization, Smooth animations,
 # PHASE 13 — OPTIONAL ADVANCED
 
 Khmer language, Wishlist, Loyalty points, Coupons, Telegram notifications, Supplier management, Multi-store, Expiration tracking, Advanced analytics
+
+---
+
+# PHASE 14 — MULTI-TENANT SaaS PLATFORM
+
+The single-tenant store was transformed into a multi-tenant SaaS where many cosmetic
+shops run on one deployment, each shop owner self-onboards and pays a monthly
+subscription, and a platform `superadmin` oversees every store. Migrations 0033–0040.
+
+## Tenancy model
+- `stores` is the tenant root (created in 0033). Every shop owner (`admin`) owns exactly
+  one store; staff and customers belong to a store via `profiles.store_id`.
+- The `superadmin` (role added in 0033, seeded in 0036) has `store_id = NULL` and sits
+  above all stores, bypassing tenant scoping everywhere.
+- 0034 adds `store_id` to every tenant-owned table and makes formerly-global unique
+  constraints (slug, sku, barcode, coupon code) **per-store**, so two shops can reuse
+  the same slug/code.
+- 0035 turns the singleton `store_settings` into one row per store (auto-created by
+  trigger on store insert).
+
+## Tenant resolution & routing (`src/lib/tenant/`, `src/lib/supabase/proxy.ts`)
+- The middleware (`updateSession` in `proxy.ts`) resolves the incoming request to a
+  store: a custom domain (Host) or a `/s/{slug}` path → `resolve_store` RPC. Platform
+  hosts (localhost, `*.vercel.app`, the apex `NEXT_PUBLIC_PLATFORM_DOMAIN`) fall back to
+  the **default store** so the original single-tenant shop keeps working.
+- The resolved store id/slug/status is forwarded on request headers
+  (`x-store-id` / `x-store-slug` / `x-store-status`); server components & actions read it
+  via `getStoreContext()` (`tenant/context.ts`, cached per request).
+- The superadmin area (`/superadmin`) is never store-bound.
+- When a store's access has lapsed (locked/cancelled), the storefront/admin is redirected
+  to `/store-unavailable`. `tenant/status.ts` (`effectiveStoreStatus`) mirrors the SQL
+  `store_access_status()` so the UI can label state without a round-trip. Statuses:
+  `trial | active | grace | locked | cancelled` (grace window = `GRACE_DAYS`).
+
+## RLS & SECURITY DEFINER (0038, 0040)
+- 0038 rewrites RLS on every tenant-owned table: reads/writes require
+  `is_superadmin() OR (is_staff() AND store_id = current_store_id())`, keeping public
+  catalog reads (active products/inventory, active coupons, store branding) open for
+  anonymous storefront visitors (the app filters those by resolved store).
+- 0040 makes the SECURITY DEFINER helpers store-aware so bypassing RLS stays isolated:
+  `handle_new_user` (signup inherits `store_id` from metadata), `create_customer_order`
+  (stamps order/items with the resolved store, scopes coupon, refuses cross-store carts),
+  `apply_inventory_movement` (stamps movement, refuses cross-store adjustments).
+
+## Subscription billing (0037, `src/lib/billing/`, `src/lib/bakong/`)
+- 3 plans, codes `starter | growth | pro` ($9 / $19 / $29). Each plan carries a `limits`
+  jsonb (capability gates: `max_products`, `max_staff`, `coupons`, `loyalty`, `pos`,
+  `custom_domain`, `advanced_analytics`); `parsePlanLimits` coerces it. The `stores` row
+  stays the source of truth for **access** (status + period dates the middleware reads);
+  `activate_subscription()` keeps it in sync.
+- Payment: **Bakong KHQR** (env-gated via `lib/bakong/config.ts` — `BAKONG_ACCOUNT_ID`,
+  `BAKONG_MERCHANT_NAME`, `BAKONG_API_TOKEN`, optional city/base). When Bakong is
+  unconfigured, the flow falls back to **manual screenshot proof + superadmin approval**
+  (same pattern as the Telegram helper). `subscription_payments` is the ledger.
+- Store-owner onboarding (`/start`, `actions/onboarding.ts`) is **pay-first, no free
+  trial**: create auth user → create store (service-role, since `stores` is
+  superadmin-insert only) on the chosen plan → promote profile to `admin` → store starts
+  locked → owner is sent to `/admin/billing` to pay before going live.
+
+## Superadmin console (`src/app/(superadmin)/`, `services/platform.ts`)
+- Pages: dashboard, stores (+ `[id]` detail), subscriptions, plans, users, finance.
+- Platform finance (0039): subscription revenue (from paid `subscription_payments`)
+  minus `platform_expenses` (hosting/server/other), rolled up by month/year via
+  SECURITY DEFINER functions guarded by `is_superadmin()`.
+
+## Credentials (CHANGE after first login)
+- Superadmin: phone `010552223` / password `12345678` (seeded in 0036).
+- Default-store admin: phone `017552223` / password `12345678` (seeded in 0030).
 
 ---
 

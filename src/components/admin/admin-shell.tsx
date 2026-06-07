@@ -15,6 +15,7 @@ import {
   Tag,
   Receipt,
   Settings,
+  CreditCard,
   MoreHorizontal,
   X,
 } from "lucide-react";
@@ -45,6 +46,7 @@ const SECONDARY_NAV: readonly NavItem[] = [
   { href: "/admin/scan", label: "Scan", icon: ScanLine },
   { href: "/admin/coupons", label: "Coupons", icon: Tag },
   { href: "/admin/notifications", label: "Alerts", icon: Bell, badge: true },
+  { href: "/admin/billing", label: "Billing", icon: CreditCard, adminOnly: true },
   { href: "/admin/settings", label: "Settings", icon: Settings, adminOnly: true },
 ];
 
@@ -59,7 +61,10 @@ const SIDEBAR_GROUPS: readonly { title: string; items: readonly NavItem[] }[] = 
     title: "Catalog",
     items: [PRIMARY_NAV[3], SECONDARY_NAV[0], SECONDARY_NAV[1]],
   },
-  { title: "System", items: [SECONDARY_NAV[3], SECONDARY_NAV[4]] },
+  {
+    title: "System",
+    items: [SECONDARY_NAV[3], SECONDARY_NAV[4], SECONDARY_NAV[5]],
+  },
 ];
 
 function isActive(pathname: string, item: NavItem) {

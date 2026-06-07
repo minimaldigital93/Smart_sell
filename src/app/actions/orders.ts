@@ -11,6 +11,7 @@ import { normalizePhone, phoneToEmail } from "@/lib/auth/phone";
 import { notifyNewOrder } from "@/lib/notifications/telegram";
 import { updateOrderStatusSchema } from "@/lib/orders/schemas";
 import { canTransition } from "@/lib/orders/transitions";
+import { getCurrentStoreId } from "@/lib/tenant/context";
 
 export type SubmitOrderResult =
   | { ok: true; orderId: string }
@@ -62,12 +63,19 @@ export async function submitOrderAction(
   }
   const values = parsed.data;
   const supabase = await createClient();
+  // The storefront the customer is checking out on determines the order's store.
+  const storeId = await getCurrentStoreId();
 
   // 1b. Ensure the buyer has an account. Logged-in customers skip this; a guest
   //     creates one (phone + password) — or signs in if the phone is already
   //     registered — so the order is tied to a login they can return to. Done
   //     before any storage/order work so a bad password fails fast and cheap.
-  const accountErr = await ensureCheckoutAccount(supabase, formData, values);
+  const accountErr = await ensureCheckoutAccount(
+    supabase,
+    formData,
+    values,
+    storeId,
+  );
   if (accountErr) return { ok: false, error: accountErr };
 
   // 2. Validate + size the payment screenshot BEFORE touching the order. The
@@ -136,6 +144,7 @@ export async function submitOrderAction(
       })),
       p_coupon_code: values.coupon_code?.trim() || null,
       p_points: values.points_to_redeem ?? 0,
+      p_store_id: storeId,
     },
   );
 
@@ -175,6 +184,7 @@ async function ensureCheckoutAccount(
   supabase: SupabaseServer,
   formData: FormData,
   values: { customer_name: string; phone: string },
+  storeId: string | null,
 ): Promise<string | null> {
   const {
     data: { user },
@@ -192,7 +202,11 @@ async function ensureCheckoutAccount(
     email,
     password,
     options: {
-      data: { name: values.customer_name, phone: normalizePhone(values.phone) },
+      data: {
+        name: values.customer_name,
+        phone: normalizePhone(values.phone),
+        ...(storeId ? { store_id: storeId } : {}),
+      },
     },
   });
 

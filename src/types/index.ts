@@ -21,6 +21,18 @@ export type Notification = Database["public"]["Tables"]["notifications"]["Row"];
 export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 export type LoyaltyTransaction = Database["public"]["Tables"]["loyalty_transactions"]["Row"];
 
+export type Store = Database["public"]["Tables"]["stores"]["Row"];
+export type StoreInsert = Database["public"]["Tables"]["stores"]["Insert"];
+
+export type SubscriptionPlan =
+  Database["public"]["Tables"]["subscription_plans"]["Row"];
+export type Subscription =
+  Database["public"]["Tables"]["subscriptions"]["Row"];
+export type SubscriptionPayment =
+  Database["public"]["Tables"]["subscription_payments"]["Row"];
+export type PlatformExpense =
+  Database["public"]["Tables"]["platform_expenses"]["Row"];
+
 // Client-side cart item — distinct from DB order_items.
 export type CartItem = {
   productId: string;

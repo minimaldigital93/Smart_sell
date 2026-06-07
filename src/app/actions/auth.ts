@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { humanizeAuthError } from "@/lib/auth/errors";
 import { checkRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { normalizePhone, phoneToEmail } from "@/lib/auth/phone";
+import { getCurrentStoreId } from "@/lib/tenant/context";
 import {
   signInSchema,
   signUpSchema,
@@ -56,7 +57,12 @@ export async function signInAction(
         .maybeSingle();
       role = profile?.role ?? null;
     }
-    destination = role === "admin" || role === "staff" ? "/admin" : "/account";
+    destination =
+      role === "superadmin"
+        ? "/superadmin"
+        : role === "admin" || role === "staff"
+          ? "/admin"
+          : "/account";
   }
 
   revalidatePath("/", "layout");
@@ -85,12 +91,20 @@ export async function signUpAction(
 
   const supabase = await createClient();
   const normalizedPhone = normalizePhone(parsed.data.phone);
+  // Customers belong to the store whose storefront they registered on. The
+  // resolved store_id is trusted (set by middleware), so handle_new_user can
+  // safely read it from the signup metadata.
+  const storeId = await getCurrentStoreId();
 
   const { data, error } = await supabase.auth.signUp({
     email: phoneToEmail(parsed.data.phone),
     password: parsed.data.password,
     options: {
-      data: { name: parsed.data.name, phone: normalizedPhone },
+      data: {
+        name: parsed.data.name,
+        phone: normalizedPhone,
+        ...(storeId ? { store_id: storeId } : {}),
+      },
     },
   });
 

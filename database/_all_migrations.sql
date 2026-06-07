@@ -2733,3 +2733,1316 @@ create index if not exists products_on_sale_idx
 
 create index if not exists products_new_arrival_idx
   on public.products(new_arrival) where new_arrival and is_active;
+
+
+-- ============================================
+-- database/migrations/0033_superadmin_and_stores.sql
+-- ============================================
+
+-- 0033_superadmin_and_stores.sql
+-- Tenancy foundation: introduce the platform `superadmin` role and the `stores`
+-- table (tenant root). Every shop owner ("admin") owns exactly one store; staff
+-- and customers belong to a store via profiles.store_id. The superadmin sits
+-- above all stores (store_id is NULL) and bypasses tenant scoping.
+--
+-- IMPORTANT: the new enum value 'superadmin' is added here but NEVER referenced
+-- as an enum literal in this same migration (Postgres forbids using a freshly
+-- added enum value in the transaction that added it). Helper functions compare
+-- against role::text instead. Seeding a superadmin account happens in 0036,
+-- which runs as its own statement/transaction.
+
+-- 1) Role -------------------------------------------------------------------
+alter type public.user_role add value if not exists 'superadmin';
+
+-- 2) Stores (tenant root) ---------------------------------------------------
+create table if not exists public.stores (
+  id                 uuid primary key default gen_random_uuid(),
+  slug               citext not null unique,
+  name               text not null,
+  owner_id           uuid references public.profiles(id) on delete set null,
+  custom_domain      citext unique,
+  domain_verified    boolean not null default false,
+  -- Persisted lifecycle state. The *effective* status (incl. grace/lock) is
+  -- derived from dates by store_access_status(); this column only records the
+  -- coarse state a human/superadmin set (e.g. cancelled, locked).
+  status             text not null default 'trial'
+                       check (status in ('trial','active','grace','locked','cancelled')),
+  plan_id            uuid,            -- FK added in 0037 (billing) to avoid a cycle
+  trial_ends_at      timestamptz,
+  current_period_end timestamptz,
+  created_at         timestamptz not null default now(),
+  updated_at         timestamptz not null default now()
+);
+
+create index if not exists stores_owner_idx on public.stores(owner_id);
+create index if not exists stores_custom_domain_idx
+  on public.stores(custom_domain) where custom_domain is not null;
+
+drop trigger if exists stores_set_updated_at on public.stores;
+create trigger stores_set_updated_at
+  before update on public.stores
+  for each row execute function public.set_updated_at();
+
+-- 3) Profiles belong to a store --------------------------------------------
+alter table public.profiles
+  add column if not exists store_id uuid references public.stores(id) on delete set null;
+
+create index if not exists profiles_store_idx on public.profiles(store_id);
+
+-- 4) Tenancy helper functions ----------------------------------------------
+-- All SECURITY DEFINER + stable so they cache per statement and don't recurse
+-- through RLS on profiles.
+
+create or replace function public.is_superadmin() returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.profiles
+     where id = auth.uid()
+       and role::text = 'superadmin'
+  );
+$$;
+
+create or replace function public.current_store_id() returns uuid
+language sql stable security definer set search_path = public as $$
+  select store_id from public.profiles where id = auth.uid();
+$$;
+
+-- Transition helper used as the column DEFAULT for store_id on tenant tables
+-- (set in 0034). It resolves to the writer's own store, falling back to the
+-- "default" store for anonymous storefront writes. Once every service stamps
+-- store_id explicitly (S7), these column defaults can be dropped.
+create or replace function public.default_store_id() returns uuid
+language sql stable security definer set search_path = public as $$
+  select coalesce(
+    (select store_id from public.profiles where id = auth.uid()),
+    (select id from public.stores where slug = 'default')
+  );
+$$;
+
+-- Effective access state for a store, derived from its dates. Order matters:
+-- explicit cancelled/locked win; then active paid period; then trial; then a
+-- 3-day grace window after the latest of (trial end, paid period end); else
+-- locked.
+create or replace function public.store_access_status(p_store uuid)
+returns text language sql stable security definer set search_path = public as $$
+  select case
+    when s.status in ('cancelled','locked') then s.status
+    when s.current_period_end is not null and now() < s.current_period_end then 'active'
+    when s.trial_ends_at is not null and now() < s.trial_ends_at then 'trial'
+    when now() < greatest(
+           coalesce(s.current_period_end, 'epoch'::timestamptz),
+           coalesce(s.trial_ends_at,     'epoch'::timestamptz)
+         ) + interval '3 days' then 'grace'
+    else 'locked'
+  end
+  from public.stores s
+  where s.id = p_store;
+$$;
+
+-- Tenant resolution for middleware: map an incoming Host or /s/{slug} to a
+-- store WITHOUT exposing the stores table to anon (stores RLS stays locked).
+-- Host (custom_domain) wins over slug. Returns the effective access status too.
+create or replace function public.resolve_store(p_host text, p_slug text)
+returns table (id uuid, slug citext, status text)
+language sql stable security definer set search_path = public as $$
+  select s.id, s.slug, public.store_access_status(s.id)
+    from public.stores s
+   where (nullif(p_host, '') is not null and s.custom_domain = p_host)
+      or (nullif(p_slug, '') is not null and s.slug = p_slug)
+   order by (p_host is not null and s.custom_domain = p_host) desc
+   limit 1;
+$$;
+
+grant execute on function public.is_superadmin() to authenticated;
+grant execute on function public.current_store_id() to authenticated;
+grant execute on function public.default_store_id() to anon, authenticated;
+grant execute on function public.store_access_status(uuid) to anon, authenticated;
+grant execute on function public.resolve_store(text, text) to anon, authenticated;
+
+-- 5) Default store + backfill ----------------------------------------------
+-- The existing single store becomes "Default Store", owned by the seed admin
+-- from 0030. It is set to a far-future active period so the current shop keeps
+-- working unchanged after this migration. Every existing profile joins it.
+do $$
+declare
+  v_owner uuid;
+  v_store uuid;
+begin
+  select id into v_owner
+    from public.profiles
+   where role::text = 'admin'
+   order by created_at
+   limit 1;
+
+  insert into public.stores (slug, name, owner_id, status, current_period_end, trial_ends_at)
+  values ('default', 'Default Store', v_owner, 'active',
+          now() + interval '3650 days', now() + interval '3650 days')
+  on conflict (slug) do nothing;
+
+  select id into v_store from public.stores where slug = 'default';
+
+  update public.profiles
+     set store_id = v_store
+   where store_id is null
+     and role::text in ('admin','staff','customer');
+end $$;
+
+-- Enable RLS on stores now; full policies land in 0038. Until then, restrict to
+-- a safe default: superadmin all, owners read their own store.
+alter table public.stores enable row level security;
+
+drop policy if exists stores_superadmin_all on public.stores;
+create policy stores_superadmin_all on public.stores
+  for all using (public.is_superadmin()) with check (public.is_superadmin());
+
+drop policy if exists stores_owner_read on public.stores;
+create policy stores_owner_read on public.stores
+  for select using (id = public.current_store_id());
+
+
+-- ============================================
+-- database/migrations/0034_store_scoping.sql
+-- ============================================
+
+-- 0034_store_scoping.sql
+-- Add store_id to every tenant-owned table, backfill existing rows to the
+-- "default" store created in 0033, then enforce NOT NULL. Global unique
+-- constraints (slug/sku/barcode/coupon code) become per-store unique so two
+-- different shops can reuse the same slug or code.
+--
+-- RLS is rewritten in 0038; this migration only changes columns/indexes.
+
+do $$
+declare
+  v_store uuid;
+begin
+  select id into v_store from public.stores where slug = 'default';
+
+  -- ---- products ----------------------------------------------------------
+  alter table public.products
+    add column if not exists store_id uuid references public.stores(id) on delete cascade;
+  update public.products set store_id = v_store where store_id is null;
+  alter table public.products alter column store_id set not null;
+
+  -- ---- product_inventory -------------------------------------------------
+  alter table public.product_inventory
+    add column if not exists store_id uuid references public.stores(id) on delete cascade;
+  update public.product_inventory set store_id = v_store where store_id is null;
+  alter table public.product_inventory alter column store_id set not null;
+
+  -- ---- orders ------------------------------------------------------------
+  alter table public.orders
+    add column if not exists store_id uuid references public.stores(id) on delete cascade;
+  update public.orders set store_id = v_store where store_id is null;
+  alter table public.orders alter column store_id set not null;
+
+  -- ---- order_items (inherit the parent order's store) --------------------
+  alter table public.order_items
+    add column if not exists store_id uuid references public.stores(id) on delete cascade;
+  update public.order_items oi
+     set store_id = o.store_id
+    from public.orders o
+   where o.id = oi.order_id and oi.store_id is null;
+  alter table public.order_items alter column store_id set not null;
+
+  -- ---- inventory_movements ----------------------------------------------
+  alter table public.inventory_movements
+    add column if not exists store_id uuid references public.stores(id) on delete cascade;
+  update public.inventory_movements set store_id = v_store where store_id is null;
+  alter table public.inventory_movements alter column store_id set not null;
+
+  -- ---- coupons -----------------------------------------------------------
+  alter table public.coupons
+    add column if not exists store_id uuid references public.stores(id) on delete cascade;
+  update public.coupons set store_id = v_store where store_id is null;
+  alter table public.coupons alter column store_id set not null;
+
+  -- ---- loyalty_transactions ---------------------------------------------
+  alter table public.loyalty_transactions
+    add column if not exists store_id uuid references public.stores(id) on delete cascade;
+  update public.loyalty_transactions set store_id = v_store where store_id is null;
+  alter table public.loyalty_transactions alter column store_id set not null;
+
+  -- ---- notifications (nullable: NULL store_id = platform broadcast) ------
+  alter table public.notifications
+    add column if not exists store_id uuid references public.stores(id) on delete cascade;
+  update public.notifications set store_id = v_store where store_id is null;
+end $$;
+
+-- Transition defaults: writes that omit store_id (existing services, pre-S7)
+-- land in the writer's own store, or the default store for anonymous storefront
+-- orders. Dropped once every service stamps store_id explicitly (S7).
+alter table public.products            alter column store_id set default public.default_store_id();
+alter table public.product_inventory   alter column store_id set default public.default_store_id();
+alter table public.orders              alter column store_id set default public.default_store_id();
+alter table public.order_items         alter column store_id set default public.default_store_id();
+alter table public.inventory_movements alter column store_id set default public.default_store_id();
+alter table public.coupons             alter column store_id set default public.default_store_id();
+alter table public.loyalty_transactions alter column store_id set default public.default_store_id();
+alter table public.notifications       alter column store_id set default public.default_store_id();
+
+-- Per-store uniqueness -------------------------------------------------------
+drop index if exists public.products_slug_unique;
+drop index if exists public.products_sku_unique;
+drop index if exists public.products_barcode_unique;
+create unique index if not exists products_store_slug_unique
+  on public.products(store_id, slug);
+create unique index if not exists products_store_sku_unique
+  on public.products(store_id, sku) where sku is not null;
+create unique index if not exists products_store_barcode_unique
+  on public.products(store_id, barcode) where barcode is not null;
+
+drop index if exists public.product_inventory_barcode_unique;
+create unique index if not exists product_inventory_store_barcode_unique
+  on public.product_inventory(store_id, barcode) where barcode is not null;
+
+alter table public.coupons drop constraint if exists coupons_code_key;
+create unique index if not exists coupons_store_code_unique
+  on public.coupons(store_id, code);
+
+-- Store-leading indexes for the common "this store's rows" scans ------------
+create index if not exists products_store_idx on public.products(store_id);
+create index if not exists product_inventory_store_idx on public.product_inventory(store_id);
+create index if not exists orders_store_status_idx on public.orders(store_id, status, created_at desc);
+create index if not exists order_items_store_idx on public.order_items(store_id);
+create index if not exists inventory_movements_store_idx
+  on public.inventory_movements(store_id, created_at desc);
+create index if not exists coupons_store_idx on public.coupons(store_id);
+create index if not exists loyalty_transactions_store_idx on public.loyalty_transactions(store_id);
+create index if not exists notifications_store_idx
+  on public.notifications(store_id, created_at desc);
+
+
+-- ============================================
+-- database/migrations/0035_store_settings_per_store.sql
+-- ============================================
+
+-- 0035_store_settings_per_store.sql
+-- Turn the singleton store_settings (id = 1) into one row per store.
+--
+-- Transition-safe: the legacy `id` column is kept (the default store's row stays
+-- id = 1) so the current getStoreSettings() query (.eq("id", 1)) keeps working
+-- until S7 switches it to store_id. The real key becomes store_id. A trigger
+-- auto-creates a settings row whenever a new store is inserted.
+
+-- 1) Add the tenant key and backfill the existing singleton ------------------
+alter table public.store_settings
+  add column if not exists store_id uuid references public.stores(id) on delete cascade;
+
+update public.store_settings
+   set store_id = (select id from public.stores where slug = 'default')
+ where store_id is null;
+
+-- 2) Move the primary key from id -> store_id; relax the legacy id column -----
+do $$ begin
+  alter table public.store_settings drop constraint if exists store_settings_pkey;
+  alter table public.store_settings drop constraint if exists store_settings_id_check;
+exception when others then null; end $$;
+
+alter table public.store_settings alter column id drop default;
+alter table public.store_settings alter column id drop not null;
+alter table public.store_settings alter column store_id set not null;
+
+create unique index if not exists store_settings_store_unique
+  on public.store_settings(store_id);
+
+do $$ begin
+  alter table public.store_settings add constraint store_settings_pkey primary key (store_id);
+exception when others then null; end $$;
+
+-- 3) Auto-create a settings row for every new store -------------------------
+create or replace function public.handle_new_store() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  insert into public.store_settings (store_id, business_name, tagline)
+  values (new.id, new.name, 'Cosmetic Store Management')
+  on conflict (store_id) do nothing;
+  return new;
+end $$;
+
+drop trigger if exists on_store_created on public.stores;
+create trigger on_store_created
+  after insert on public.stores
+  for each row execute function public.handle_new_store();
+
+
+-- ============================================
+-- database/migrations/0036_seed_superadmin.sql
+-- ============================================
+
+-- 0036_seed_superadmin.sql
+-- Seed the platform owner (superadmin). Runs as its own migration so the
+-- 'superadmin' enum value added in 0033 is already committed and safe to use.
+--
+-- Credentials (CHANGE THESE after first login):
+--   phone:    010552223   (normalizes to 10552223 -> 10552223@phone.csms.app)
+--   password: 12345678
+--
+-- The superadmin has store_id = NULL and sits above every store.
+
+create extension if not exists pgcrypto;
+
+do $$
+declare
+  v_id    uuid := gen_random_uuid();
+  v_email text := '10552223@phone.csms.app';
+begin
+  -- Skip if this superadmin email already exists.
+  if exists (select 1 from auth.users where email = v_email) then
+    return;
+  end if;
+
+  insert into auth.users (
+    instance_id, id, aud, role, email, encrypted_password,
+    email_confirmed_at, created_at, updated_at,
+    raw_app_meta_data, raw_user_meta_data,
+    confirmation_token, recovery_token,
+    email_change, email_change_token_new, email_change_token_current,
+    phone_change, phone_change_token, reauthentication_token
+  ) values (
+    '00000000-0000-0000-0000-000000000000', v_id,
+    'authenticated', 'authenticated', v_email,
+    crypt('12345678', gen_salt('bf')),
+    now(), now(), now(),
+    '{"provider":"email","providers":["email"]}'::jsonb,
+    jsonb_build_object('name', 'Super Admin', 'phone', '10552223'),
+    '', '', '', '', '', '', '', ''
+  );
+
+  insert into auth.identities (
+    id, user_id, provider_id, identity_data, provider,
+    last_sign_in_at, created_at, updated_at
+  ) values (
+    gen_random_uuid(), v_id, v_id::text,
+    jsonb_build_object('sub', v_id::text, 'email', v_email),
+    'email', now(), now(), now()
+  );
+
+  -- handle_new_user() may have created a 'customer' profile; promote it.
+  insert into public.profiles (id, role, name, phone, email, store_id)
+  values (v_id, 'superadmin', 'Super Admin', '10552223', null, null)
+  on conflict (id) do update
+    set role     = 'superadmin',
+        name     = 'Super Admin',
+        phone    = '10552223',
+        store_id = null;
+end $$;
+
+
+-- ============================================
+-- database/migrations/0037_billing.sql
+-- ============================================
+
+-- 0037_billing.sql
+-- Subscription billing for stores: plans ($9/$19/$29), one subscription per
+-- store, and a payment ledger (KHQR via Bakong, or a manual screenshot proof).
+-- The stores table stays the source of truth for *access* (status/period dates
+-- the middleware reads); activate_subscription() keeps it in sync.
+
+-- 1) Plans ------------------------------------------------------------------
+create table if not exists public.subscription_plans (
+  id          uuid primary key default gen_random_uuid(),
+  code        text not null unique,
+  name        text not null,
+  price_usd   numeric(10,2) not null check (price_usd >= 0),
+  interval    text not null default 'month' check (interval in ('month','year')),
+  features    jsonb not null default '[]'::jsonb,
+  limits      jsonb not null default '{}'::jsonb,
+  sort        integer not null default 0,
+  is_active   boolean not null default true,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+
+drop trigger if exists subscription_plans_set_updated_at on public.subscription_plans;
+create trigger subscription_plans_set_updated_at
+  before update on public.subscription_plans
+  for each row execute function public.set_updated_at();
+
+-- Seed the three tiers. Limits/features are configurable later from the
+-- superadmin Plans page; -1 means "unlimited".
+insert into public.subscription_plans (code, name, price_usd, sort, features, limits) values
+  ('starter', 'Starter', 9,  1,
+   '["Online storefront","Inventory & barcode","Order management","1 staff account"]'::jsonb,
+   '{"max_products":50,"max_staff":1,"coupons":false,"loyalty":false,"pos":false,"custom_domain":false,"advanced_analytics":false}'::jsonb),
+  ('growth', 'Growth', 19, 2,
+   '["Everything in Starter","Up to 500 products","5 staff accounts","Coupons & loyalty"]'::jsonb,
+   '{"max_products":500,"max_staff":5,"coupons":true,"loyalty":true,"pos":false,"custom_domain":false,"advanced_analytics":false}'::jsonb),
+  ('pro', 'Pro', 29, 3,
+   '["Everything in Growth","Unlimited products & staff","POS register","Custom domain","Advanced analytics"]'::jsonb,
+   '{"max_products":-1,"max_staff":-1,"coupons":true,"loyalty":true,"pos":true,"custom_domain":true,"advanced_analytics":true}'::jsonb)
+on conflict (code) do nothing;
+
+-- Now that plans exist, point stores.plan_id at them.
+do $$ begin
+  alter table public.stores
+    add constraint stores_plan_id_fkey
+    foreign key (plan_id) references public.subscription_plans(id) on delete set null;
+exception when duplicate_object then null; end $$;
+
+-- 2) Subscriptions (one per store) ------------------------------------------
+create table if not exists public.subscriptions (
+  id                   uuid primary key default gen_random_uuid(),
+  store_id             uuid not null unique references public.stores(id) on delete cascade,
+  plan_id              uuid references public.subscription_plans(id) on delete set null,
+  status               text not null default 'trialing'
+                         check (status in ('trialing','active','past_due','canceled')),
+  current_period_start timestamptz,
+  current_period_end   timestamptz,
+  trial_ends_at        timestamptz,
+  cancel_at            timestamptz,
+  created_at           timestamptz not null default now(),
+  updated_at           timestamptz not null default now()
+);
+
+drop trigger if exists subscriptions_set_updated_at on public.subscriptions;
+create trigger subscriptions_set_updated_at
+  before update on public.subscriptions
+  for each row execute function public.set_updated_at();
+
+-- 3) Payment ledger ---------------------------------------------------------
+create table if not exists public.subscription_payments (
+  id              uuid primary key default gen_random_uuid(),
+  store_id        uuid not null references public.stores(id) on delete cascade,
+  plan_id         uuid references public.subscription_plans(id) on delete set null,
+  amount_usd      numeric(10,2) not null check (amount_usd >= 0),
+  method          text not null default 'khqr' check (method in ('khqr','manual')),
+  bill_number     text,
+  bakong_md5      text,
+  bakong_txn_ref  text,
+  status          text not null default 'pending'
+                    check (status in ('pending','paid','failed','expired')),
+  proof_url       text,
+  paid_at         timestamptz,
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now()
+);
+
+create index if not exists subscription_payments_store_idx
+  on public.subscription_payments(store_id, created_at desc);
+create index if not exists subscription_payments_status_idx
+  on public.subscription_payments(status) where status = 'pending';
+create index if not exists subscription_payments_md5_idx
+  on public.subscription_payments(bakong_md5) where bakong_md5 is not null;
+
+drop trigger if exists subscription_payments_set_updated_at on public.subscription_payments;
+create trigger subscription_payments_set_updated_at
+  before update on public.subscription_payments
+  for each row execute function public.set_updated_at();
+
+-- 4) RPCs -------------------------------------------------------------------
+-- Start a 14-day trial for a store on the given plan. Idempotent-ish: callable
+-- at store creation (S7). Caller must own the store or be superadmin.
+create or replace function public.start_store_trial(p_store uuid, p_plan_code text)
+returns void
+language plpgsql security definer set search_path = public as $$
+declare
+  v_plan uuid;
+  v_trial_end timestamptz := now() + interval '14 days';
+begin
+  if not (public.is_superadmin() or p_store = public.current_store_id()) then
+    raise exception 'not authorized for store %', p_store;
+  end if;
+
+  select id into v_plan from public.subscription_plans where code = p_plan_code;
+
+  update public.stores
+     set plan_id = v_plan, status = 'trial', trial_ends_at = v_trial_end
+   where id = p_store;
+
+  insert into public.subscriptions (store_id, plan_id, status, trial_ends_at)
+  values (p_store, v_plan, 'trialing', v_trial_end)
+  on conflict (store_id) do update
+    set plan_id = excluded.plan_id,
+        status = 'trialing',
+        trial_ends_at = excluded.trial_ends_at;
+end $$;
+
+-- Mark a payment paid and extend the store's paid period by 30 days. Returns
+-- the new period end. Caller must own the payment's store or be superadmin.
+create or replace function public.activate_subscription(p_payment uuid)
+returns timestamptz
+language plpgsql security definer set search_path = public as $$
+declare
+  v_store uuid;
+  v_plan  uuid;
+  v_new_end timestamptz;
+begin
+  select store_id, plan_id into v_store, v_plan
+    from public.subscription_payments where id = p_payment;
+  if v_store is null then
+    raise exception 'payment % not found', p_payment;
+  end if;
+  if not (public.is_superadmin() or v_store = public.current_store_id()) then
+    raise exception 'not authorized for payment %', p_payment;
+  end if;
+
+  update public.subscription_payments
+     set status = 'paid', paid_at = coalesce(paid_at, now())
+   where id = p_payment;
+
+  select greatest(now(), coalesce(current_period_end, now())) + interval '30 days'
+    into v_new_end
+    from public.stores where id = v_store;
+
+  update public.stores
+     set status = 'active', plan_id = coalesce(v_plan, plan_id),
+         current_period_end = v_new_end
+   where id = v_store;
+
+  insert into public.subscriptions (store_id, plan_id, status, current_period_start, current_period_end)
+  values (v_store, v_plan, 'active', now(), v_new_end)
+  on conflict (store_id) do update
+    set plan_id = coalesce(excluded.plan_id, public.subscriptions.plan_id),
+        status = 'active',
+        current_period_start = now(),
+        current_period_end = excluded.current_period_end;
+
+  return v_new_end;
+end $$;
+
+grant execute on function public.start_store_trial(uuid, text) to authenticated;
+grant execute on function public.activate_subscription(uuid) to authenticated;
+
+-- 5) RLS --------------------------------------------------------------------
+alter table public.subscription_plans enable row level security;
+alter table public.subscriptions enable row level security;
+alter table public.subscription_payments enable row level security;
+
+-- Plans are public (pricing page); only superadmin writes.
+drop policy if exists plans_read_all on public.subscription_plans;
+create policy plans_read_all on public.subscription_plans
+  for select using (true);
+drop policy if exists plans_write_superadmin on public.subscription_plans;
+create policy plans_write_superadmin on public.subscription_plans
+  for all using (public.is_superadmin()) with check (public.is_superadmin());
+
+-- A store sees its own subscription; superadmin sees all.
+drop policy if exists subscriptions_read on public.subscriptions;
+create policy subscriptions_read on public.subscriptions
+  for select using (public.is_superadmin() or store_id = public.current_store_id());
+drop policy if exists subscriptions_write_superadmin on public.subscriptions;
+create policy subscriptions_write_superadmin on public.subscriptions
+  for all using (public.is_superadmin()) with check (public.is_superadmin());
+
+-- A store reads + creates its own payments; superadmin manages all.
+drop policy if exists payments_read on public.subscription_payments;
+create policy payments_read on public.subscription_payments
+  for select using (public.is_superadmin() or store_id = public.current_store_id());
+drop policy if exists payments_insert_own on public.subscription_payments;
+create policy payments_insert_own on public.subscription_payments
+  for insert with check (public.is_superadmin() or store_id = public.current_store_id());
+drop policy if exists payments_write_superadmin on public.subscription_payments;
+create policy payments_write_superadmin on public.subscription_payments
+  for all using (public.is_superadmin()) with check (public.is_superadmin());
+
+
+-- ============================================
+-- database/migrations/0038_rls_multitenant.sql
+-- ============================================
+
+-- 0038_rls_multitenant.sql
+-- Rewrite RLS on every tenant-owned table so a store's staff/admin see and
+-- modify ONLY their own store's rows, while the platform superadmin bypasses
+-- tenant scoping everywhere. Public catalog reads (active products, inventory,
+-- active coupons, store branding) stay readable so anonymous storefront
+-- visitors work; the app filters those by the resolved store_id.
+--
+-- Pattern:
+--   reads  : is_superadmin() OR (is_staff() AND store_id = current_store_id())
+--            [+ owner/customer/public clauses where they already existed]
+--   writes : is_superadmin() OR (is_staff() AND store_id = current_store_id())
+--
+-- Customer + guest checkout still flows through create_customer_order (SECURITY
+-- DEFINER), which bypasses these policies.
+
+-- ============================================================================
+-- profiles
+-- ============================================================================
+drop policy if exists profiles_select_own_or_staff on public.profiles;
+create policy profiles_select_own_or_staff on public.profiles
+  for select
+  using (
+    id = auth.uid()
+    or public.is_superadmin()
+    or (public.is_staff() and store_id = public.current_store_id())
+  );
+
+-- profiles_update_own (unchanged intent) stays from 0008.
+
+drop policy if exists profiles_update_admin on public.profiles;
+create policy profiles_update_admin on public.profiles
+  for update
+  using (
+    public.is_superadmin()
+    or (public.is_admin() and store_id = public.current_store_id())
+  )
+  with check (
+    public.is_superadmin()
+    or (public.is_admin() and store_id = public.current_store_id())
+  );
+
+-- ============================================================================
+-- products
+-- ============================================================================
+drop policy if exists products_select_public on public.products;
+create policy products_select_public on public.products
+  for select
+  using (
+    is_active
+    or public.is_superadmin()
+    or (public.is_staff() and store_id = public.current_store_id())
+  );
+
+drop policy if exists products_modify_staff on public.products;
+create policy products_modify_staff on public.products
+  for all
+  using (
+    public.is_superadmin()
+    or (public.is_staff() and store_id = public.current_store_id())
+  )
+  with check (
+    public.is_superadmin()
+    or (public.is_staff() and store_id = public.current_store_id())
+  );
+
+-- ============================================================================
+-- product_inventory (stock is non-sensitive: public read kept)
+-- ============================================================================
+drop policy if exists inventory_modify_staff on public.product_inventory;
+create policy inventory_modify_staff on public.product_inventory
+  for all
+  using (
+    public.is_superadmin()
+    or (public.is_staff() and store_id = public.current_store_id())
+  )
+  with check (
+    public.is_superadmin()
+    or (public.is_staff() and store_id = public.current_store_id())
+  );
+
+-- ============================================================================
+-- orders
+-- ============================================================================
+drop policy if exists orders_select_owner_or_staff on public.orders;
+create policy orders_select_owner_or_staff on public.orders
+  for select
+  using (
+    public.is_superadmin()
+    or (public.is_staff() and store_id = public.current_store_id())
+    or (user_id is not null and user_id = auth.uid())
+  );
+
+drop policy if exists orders_insert_staff_only on public.orders;
+create policy orders_insert_staff_only on public.orders
+  for insert
+  with check (
+    public.is_superadmin()
+    or (public.is_staff() and store_id = public.current_store_id())
+  );
+
+drop policy if exists orders_update_staff on public.orders;
+create policy orders_update_staff on public.orders
+  for update
+  using (
+    public.is_superadmin()
+    or (public.is_staff() and store_id = public.current_store_id())
+  )
+  with check (
+    public.is_superadmin()
+    or (public.is_staff() and store_id = public.current_store_id())
+  );
+
+-- ============================================================================
+-- order_items
+-- ============================================================================
+drop policy if exists order_items_select on public.order_items;
+create policy order_items_select on public.order_items
+  for select
+  using (
+    public.is_superadmin()
+    or (public.is_staff() and store_id = public.current_store_id())
+    or exists (
+      select 1 from public.orders o
+       where o.id = order_items.order_id
+         and o.user_id = auth.uid()
+    )
+  );
+
+drop policy if exists order_items_insert_staff_only on public.order_items;
+create policy order_items_insert_staff_only on public.order_items
+  for insert
+  with check (
+    public.is_superadmin()
+    or (public.is_staff() and store_id = public.current_store_id())
+  );
+
+drop policy if exists order_items_modify_staff on public.order_items;
+create policy order_items_modify_staff on public.order_items
+  for update
+  using (public.is_superadmin() or (public.is_staff() and store_id = public.current_store_id()))
+  with check (public.is_superadmin() or (public.is_staff() and store_id = public.current_store_id()));
+
+drop policy if exists order_items_delete_staff on public.order_items;
+create policy order_items_delete_staff on public.order_items
+  for delete
+  using (public.is_superadmin() or (public.is_staff() and store_id = public.current_store_id()));
+
+-- ============================================================================
+-- inventory_movements (staff/admin of the store only)
+-- ============================================================================
+drop policy if exists movements_select_staff on public.inventory_movements;
+create policy movements_select_staff on public.inventory_movements
+  for select
+  using (public.is_superadmin() or (public.is_staff() and store_id = public.current_store_id()));
+
+drop policy if exists movements_insert_staff on public.inventory_movements;
+create policy movements_insert_staff on public.inventory_movements
+  for insert
+  with check (public.is_superadmin() or (public.is_staff() and store_id = public.current_store_id()));
+
+-- ============================================================================
+-- notifications (store-scoped broadcasts; NULL store_id = platform-wide)
+-- ============================================================================
+drop policy if exists notifications_select_visible on public.notifications;
+create policy notifications_select_visible on public.notifications
+  for select
+  using (
+    user_id = auth.uid()
+    or public.is_superadmin()
+    or (store_id is null and user_id is null and audience = 'all')
+    or (store_id = public.current_store_id() and user_id is null and audience = 'all')
+    or (store_id = public.current_store_id() and user_id is null and audience = 'staff' and public.is_staff())
+    or (public.is_staff() and store_id = public.current_store_id())
+  );
+
+-- notifications_update_own (user_id = auth.uid()) stays from 0008.
+
+drop policy if exists notifications_modify_staff on public.notifications;
+create policy notifications_modify_staff on public.notifications
+  for all
+  using (public.is_superadmin() or (public.is_staff() and store_id = public.current_store_id()))
+  with check (public.is_superadmin() or (public.is_staff() and store_id = public.current_store_id()));
+
+-- ============================================================================
+-- coupons (active coupons publicly readable; writes store-scoped)
+-- ============================================================================
+drop policy if exists coupons_select_active_or_staff on public.coupons;
+create policy coupons_select_active_or_staff on public.coupons
+  for select
+  using (
+    public.is_superadmin()
+    or (public.is_staff() and store_id = public.current_store_id())
+    or (
+      is_active
+      and (starts_at is null or starts_at <= now())
+      and (expires_at is null or expires_at > now())
+    )
+  );
+
+drop policy if exists coupons_modify_staff on public.coupons;
+create policy coupons_modify_staff on public.coupons
+  for all
+  using (public.is_superadmin() or (public.is_staff() and store_id = public.current_store_id()))
+  with check (public.is_superadmin() or (public.is_staff() and store_id = public.current_store_id()));
+
+-- ============================================================================
+-- loyalty_transactions
+-- ============================================================================
+drop policy if exists loyalty_txn_select_own on public.loyalty_transactions;
+create policy loyalty_txn_select_own on public.loyalty_transactions
+  for select
+  using (
+    user_id = auth.uid()
+    or public.is_superadmin()
+    or (public.is_staff() and store_id = public.current_store_id())
+  );
+
+drop policy if exists loyalty_txn_modify_staff on public.loyalty_transactions;
+create policy loyalty_txn_modify_staff on public.loyalty_transactions
+  for all
+  using (public.is_superadmin() or (public.is_staff() and store_id = public.current_store_id()))
+  with check (public.is_superadmin() or (public.is_staff() and store_id = public.current_store_id()));
+
+-- ============================================================================
+-- store_settings (per-store; branding publicly readable, admin-of-store writes)
+-- ============================================================================
+drop policy if exists store_settings_update_admin on public.store_settings;
+create policy store_settings_update_admin on public.store_settings
+  for update
+  using (public.is_superadmin() or (public.is_admin() and store_id = public.current_store_id()))
+  with check (public.is_superadmin() or (public.is_admin() and store_id = public.current_store_id()));
+
+-- New stores get a settings row from the on_store_created trigger (0035), but
+-- allow admin/superadmin INSERT too for completeness.
+drop policy if exists store_settings_insert_admin on public.store_settings;
+create policy store_settings_insert_admin on public.store_settings
+  for insert
+  with check (public.is_superadmin() or (public.is_admin() and store_id = public.current_store_id()));
+
+-- ============================================================================
+-- stores (replace the interim 0033 policies with full set)
+-- ============================================================================
+drop policy if exists stores_owner_read on public.stores;
+create policy stores_owner_read on public.stores
+  for select
+  using (public.is_superadmin() or id = public.current_store_id());
+
+drop policy if exists stores_owner_update on public.stores;
+create policy stores_owner_update on public.stores
+  for update
+  using (public.is_superadmin() or (public.is_admin() and id = public.current_store_id()))
+  with check (public.is_superadmin() or (public.is_admin() and id = public.current_store_id()));
+
+
+-- ============================================
+-- database/migrations/0039_platform_finance.sql
+-- ============================================
+
+-- 0039_platform_finance.sql
+-- Platform-owner finances: subscription revenue (from paid subscription_payments)
+-- minus the platform's own expenses (hosting/server/other), rolled up by month
+-- and year. Aggregations are SECURITY DEFINER functions guarded by is_superadmin()
+-- so they return platform-wide totals regardless of the caller's store RLS.
+
+-- 1) Expenses ---------------------------------------------------------------
+create table if not exists public.platform_expenses (
+  id          uuid primary key default gen_random_uuid(),
+  category    text not null default 'other' check (category in ('hosting','server','other')),
+  label       text not null,
+  amount_usd  numeric(10,2) not null check (amount_usd >= 0),
+  incurred_on date not null default current_date,
+  note        text,
+  created_by  uuid references auth.users(id) on delete set null,
+  created_at  timestamptz not null default now()
+);
+
+create index if not exists platform_expenses_incurred_idx
+  on public.platform_expenses(incurred_on desc);
+
+alter table public.platform_expenses enable row level security;
+
+drop policy if exists platform_expenses_superadmin on public.platform_expenses;
+create policy platform_expenses_superadmin on public.platform_expenses
+  for all using (public.is_superadmin()) with check (public.is_superadmin());
+
+-- 2) Monthly P&L for a year -------------------------------------------------
+create or replace function public.platform_pnl_monthly(p_year integer)
+returns table (month integer, revenue numeric, expense numeric, net numeric)
+language sql stable security definer set search_path = public as $$
+  with rev as (
+    select extract(month from paid_at)::int as m, sum(amount_usd) as amt
+      from public.subscription_payments
+     where status = 'paid' and paid_at is not null
+       and extract(year from paid_at) = p_year
+     group by 1
+  ),
+  exp as (
+    select extract(month from incurred_on)::int as m, sum(amount_usd) as amt
+      from public.platform_expenses
+     where extract(year from incurred_on) = p_year
+     group by 1
+  ),
+  months as (select generate_series(1, 12) as m)
+  select
+    mo.m,
+    coalesce(rev.amt, 0) as revenue,
+    coalesce(exp.amt, 0) as expense,
+    coalesce(rev.amt, 0) - coalesce(exp.amt, 0) as net
+  from months mo
+  left join rev on rev.m = mo.m
+  left join exp on exp.m = mo.m
+  where public.is_superadmin()
+  order by mo.m;
+$$;
+
+-- 3) Yearly P&L across all time --------------------------------------------
+create or replace function public.platform_pnl_yearly()
+returns table (year integer, revenue numeric, expense numeric, net numeric)
+language sql stable security definer set search_path = public as $$
+  with rev as (
+    select extract(year from paid_at)::int as y, sum(amount_usd) as amt
+      from public.subscription_payments
+     where status = 'paid' and paid_at is not null
+     group by 1
+  ),
+  exp as (
+    select extract(year from incurred_on)::int as y, sum(amount_usd) as amt
+      from public.platform_expenses
+     group by 1
+  ),
+  years as (
+    select y from (
+      select y from rev union select y from exp
+    ) u where y is not null
+  )
+  select
+    yr.y,
+    coalesce(rev.amt, 0) as revenue,
+    coalesce(exp.amt, 0) as expense,
+    coalesce(rev.amt, 0) - coalesce(exp.amt, 0) as net
+  from years yr
+  left join rev on rev.y = yr.y
+  left join exp on exp.y = yr.y
+  where public.is_superadmin()
+  order by yr.y desc;
+$$;
+
+-- 4) Headline summary (KPIs) ------------------------------------------------
+-- mrr        = sum of plan price for stores whose access is currently 'active'
+-- this_month = revenue, expense, net for the current calendar month
+create or replace function public.platform_summary()
+returns table (
+  mrr               numeric,
+  active_stores     integer,
+  trial_stores      integer,
+  overdue_stores    integer,
+  total_revenue     numeric,
+  total_expense     numeric,
+  month_revenue     numeric,
+  month_expense     numeric
+)
+language sql stable security definer set search_path = public as $$
+  select
+    coalesce((
+      select sum(p.price_usd)
+        from public.stores s
+        join public.subscription_plans p on p.id = s.plan_id
+       where public.store_access_status(s.id) = 'active'
+    ), 0) as mrr,
+    (select count(*)::int from public.stores s where public.store_access_status(s.id) = 'active') as active_stores,
+    (select count(*)::int from public.stores s where public.store_access_status(s.id) = 'trial') as trial_stores,
+    (select count(*)::int from public.stores s where public.store_access_status(s.id) in ('grace','locked')) as overdue_stores,
+    coalesce((select sum(amount_usd) from public.subscription_payments where status = 'paid'), 0) as total_revenue,
+    coalesce((select sum(amount_usd) from public.platform_expenses), 0) as total_expense,
+    coalesce((select sum(amount_usd) from public.subscription_payments
+               where status = 'paid' and paid_at >= date_trunc('month', now())), 0) as month_revenue,
+    coalesce((select sum(amount_usd) from public.platform_expenses
+               where incurred_on >= date_trunc('month', now())::date), 0) as month_expense
+  where public.is_superadmin();
+$$;
+
+grant execute on function public.platform_pnl_monthly(integer) to authenticated;
+grant execute on function public.platform_pnl_yearly() to authenticated;
+grant execute on function public.platform_summary() to authenticated;
+
+
+-- ============================================
+-- database/migrations/0040_functions_tenant_aware.sql
+-- ============================================
+
+-- 0040_functions_tenant_aware.sql
+-- Make the SECURITY DEFINER helpers store-aware so multi-tenant data stays
+-- isolated even though these functions bypass RLS:
+--   * handle_new_user      — customer signups inherit the store they registered
+--                            under (store_id passed in signup metadata).
+--   * create_customer_order — stamps the order + items with the resolved store,
+--                            scopes the coupon to that store, and refuses carts
+--                            with products from another store.
+--   * apply_inventory_movement — stamps the movement with the product's store
+--                            and refuses cross-store adjustments.
+
+-- 1) handle_new_user: persist store_id from signup metadata -----------------
+create or replace function public.handle_new_user() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  v_phone text := new.raw_user_meta_data->>'phone';
+  v_name  text := new.raw_user_meta_data->>'name';
+  v_store uuid := nullif(new.raw_user_meta_data->>'store_id', '')::uuid;
+begin
+  insert into public.profiles (id, email, phone, name, store_id)
+  values (
+    new.id,
+    case when new.email ilike '%@phone.csms.app' then null else new.email end,
+    coalesce(v_phone, new.phone),
+    coalesce(nullif(v_name, ''), v_phone, split_part(new.email, '@', 1)),
+    v_store
+  )
+  on conflict (id) do nothing;
+  return new;
+end $$;
+
+-- 2) create_customer_order: store-scoped checkout ---------------------------
+-- Replace the old 10-arg overload with one that takes p_store_id.
+drop function if exists public.create_customer_order(
+  uuid, text, text, text, text, public.payment_method, text, jsonb, text, integer
+);
+
+create or replace function public.create_customer_order(
+  p_order_id       uuid,
+  p_customer_name  text,
+  p_phone          text,
+  p_address        text,
+  p_note           text,
+  p_payment_method public.payment_method,
+  p_payment_image  text,
+  p_items          jsonb,
+  p_coupon_code    text default null,
+  p_points         integer default 0,
+  p_store_id       uuid default null
+) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  c_shipping_fee constant numeric(10,2) := 2;  -- mirrors SHIPPING_FEE_DEFAULT
+  v_store         uuid := coalesce(p_store_id, public.default_store_id());
+  v_user          uuid := auth.uid();
+  v_item          jsonb;
+  v_pid           uuid;
+  v_qty           integer;
+  v_prod          record;
+  v_unit          numeric(10,2);
+  v_subtotal      numeric(10,2) := 0;
+  v_coupon        record;
+  v_coupon_disc   numeric(10,2) := 0;
+  v_coupon_id     uuid := null;
+  v_coupon_code   text := null;
+  v_avail         integer;
+  v_capped_pts    integer := 0;
+  v_pts_disc      numeric(10,2) := 0;
+  v_pts_redeem    integer := 0;
+  v_max_by_ratio  numeric(10,2);
+  v_remaining     numeric(10,2);
+  v_discount      numeric(10,2);
+  v_total         numeric(10,2);
+  v_bal           integer;
+begin
+  if p_items is null or jsonb_array_length(p_items) = 0 then
+    raise exception 'cart is empty' using errcode = '22023';
+  end if;
+
+  -- 1. Validate every line (scoped to this store), lock inventory, recompute.
+  for v_item in select * from jsonb_array_elements(p_items)
+  loop
+    v_pid := (v_item->>'product_id')::uuid;
+    v_qty := (v_item->>'quantity')::integer;
+    if v_qty is null or v_qty <= 0 then
+      raise exception 'invalid quantity' using errcode = '22023';
+    end if;
+
+    select p.name, p.price, p.discount_price, p.is_active, i.current_stock
+      into v_prod
+      from public.products p
+      join public.product_inventory i on i.product_id = p.id
+     where p.id = v_pid
+       and p.store_id = v_store
+     for update of i;
+
+    if not found then
+      raise exception 'a product in your cart is unavailable'
+        using errcode = 'P0002';
+    end if;
+    if not v_prod.is_active then
+      raise exception '% is no longer available', v_prod.name
+        using errcode = '23514';
+    end if;
+
+    v_unit := case
+      when v_prod.discount_price is not null and v_prod.discount_price > 0
+           and v_prod.discount_price < v_prod.price
+        then v_prod.discount_price
+      else v_prod.price
+    end;
+    if v_unit is null or v_unit <= 0 then
+      raise exception '% has no price set', v_prod.name using errcode = '23514';
+    end if;
+    if v_prod.current_stock < v_qty then
+      raise exception 'INSUFFICIENT_STOCK:%', v_prod.name using errcode = '23514';
+    end if;
+
+    v_subtotal := v_subtotal + (v_unit * v_qty);
+  end loop;
+
+  v_subtotal := round(v_subtotal, 2);
+
+  -- 2. Coupon: scoped to this store.
+  if p_coupon_code is not null and length(trim(p_coupon_code)) > 0 then
+    select * into v_coupon
+      from public.coupons
+     where code = upper(trim(p_coupon_code))
+       and store_id = v_store
+       and is_active
+       and (starts_at is null or starts_at <= now())
+       and (expires_at is null or expires_at > now())
+     for update;
+
+    if not found then
+      raise exception 'COUPON_INVALID' using errcode = '23514';
+    end if;
+    if v_coupon.max_redemptions is not null
+       and v_coupon.redeemed_count >= v_coupon.max_redemptions then
+      raise exception 'COUPON_LIMIT' using errcode = '23514';
+    end if;
+    if v_subtotal < v_coupon.min_subtotal then
+      raise exception 'COUPON_MIN:%', v_coupon.min_subtotal using errcode = '23514';
+    end if;
+
+    v_coupon_disc := least(
+      case when v_coupon.discount_type = 'percent'
+           then round(v_subtotal * v_coupon.discount_value / 100, 2)
+           else v_coupon.discount_value end,
+      v_subtotal);
+    v_coupon_id   := v_coupon.id;
+    v_coupon_code := v_coupon.code;
+
+    update public.coupons
+       set redeemed_count = redeemed_count + 1, updated_at = now()
+     where id = v_coupon.id
+       and (max_redemptions is null or redeemed_count < max_redemptions);
+    if not found then
+      raise exception 'COUPON_LIMIT' using errcode = '23514';
+    end if;
+  end if;
+
+  -- 3. Loyalty points: cap to balance + ratio, deduct atomically.
+  if p_points > 0 and v_user is not null then
+    select loyalty_points into v_avail
+      from public.profiles where id = v_user for update;
+    v_avail := coalesce(v_avail, 0);
+    v_capped_pts := least(p_points, v_avail);
+    if v_capped_pts > 0 then
+      v_max_by_ratio := round(v_subtotal * 0.5, 2);
+      v_remaining    := greatest(0, round(v_subtotal + c_shipping_fee - v_coupon_disc, 2));
+      v_pts_disc     := least(round(v_capped_pts::numeric / 100, 2),
+                              v_max_by_ratio, v_remaining);
+      v_pts_redeem   := ceil(v_pts_disc * 100)::integer;
+    end if;
+
+    if v_pts_redeem > 0 then
+      update public.profiles
+         set loyalty_points = loyalty_points - v_pts_redeem
+       where id = v_user and loyalty_points >= v_pts_redeem
+      returning loyalty_points into v_bal;
+      if not found then
+        raise exception 'POINTS_CHANGED' using errcode = '23514';
+      end if;
+      insert into public.loyalty_transactions
+        (store_id, user_id, order_id, type, points, balance_after, note)
+      values
+        (v_store, v_user, p_order_id, 'redeem', -v_pts_redeem, v_bal, 'checkout redemption');
+    end if;
+  end if;
+
+  -- 4. Final money math.
+  v_discount := round(v_coupon_disc + v_pts_disc, 2);
+  if v_discount > round(v_subtotal + c_shipping_fee, 2) then
+    v_discount := round(v_subtotal + c_shipping_fee, 2);
+  end if;
+  v_total := round(v_subtotal + c_shipping_fee - v_discount, 2);
+
+  -- 5. Persist order + items, stamped with the store.
+  insert into public.orders (
+    id, store_id, user_id, customer_name, phone, address, note,
+    subtotal, shipping_fee, discount, total,
+    payment_method, payment_image, coupon_id, coupon_code, points_redeemed
+  ) values (
+    p_order_id, v_store, v_user, p_customer_name, p_phone, p_address,
+    nullif(trim(coalesce(p_note, '')), ''),
+    v_subtotal, c_shipping_fee, v_discount, v_total,
+    p_payment_method, p_payment_image, v_coupon_id, v_coupon_code, v_pts_redeem
+  );
+
+  for v_item in select * from jsonb_array_elements(p_items)
+  loop
+    insert into public.order_items (store_id, order_id, product_id, product_name, quantity, price)
+    values (
+      v_store,
+      p_order_id,
+      (v_item->>'product_id')::uuid,
+      'pending',                              -- overwritten by trigger
+      (v_item->>'quantity')::integer,
+      0                                       -- overwritten by trigger
+    );
+  end loop;
+
+  return jsonb_build_object('order_id', p_order_id, 'total', v_total);
+end $$;
+
+revoke all on function public.create_customer_order(
+  uuid, text, text, text, text, public.payment_method, text, jsonb, text, integer, uuid
+) from public;
+grant execute on function public.create_customer_order(
+  uuid, text, text, text, text, public.payment_method, text, jsonb, text, integer, uuid
+) to authenticated, anon;
+
+-- 3) apply_inventory_movement: guard + stamp store --------------------------
+create or replace function public.apply_inventory_movement(
+  p_product_id         uuid,
+  p_movement           public.movement_type,
+  p_quantity           integer,
+  p_notes              text default null,
+  p_order_id           uuid default null,
+  p_created_by         uuid default null,
+  p_barcode_image_url  text default null
+) returns integer
+language plpgsql security definer set search_path = public as $$
+declare
+  v_inventory   public.product_inventory%rowtype;
+  v_delta       integer;
+  v_new_stock   integer;
+  v_barcode     text;
+begin
+  if p_quantity is null then
+    raise exception 'quantity is required' using errcode = '22023';
+  end if;
+  if p_movement in ('in', 'out') and p_quantity <= 0 then
+    raise exception 'quantity must be positive for % movements (got %)',
+      p_movement, p_quantity using errcode = '22023';
+  end if;
+  if p_movement = 'adjustment' and p_quantity < 0 then
+    raise exception 'adjustment target stock cannot be negative (got %)',
+      p_quantity using errcode = '22023';
+  end if;
+
+  select * into v_inventory
+  from public.product_inventory
+  where product_id = p_product_id
+  for update;
+
+  if not found then
+    raise exception 'no inventory row for product %', p_product_id
+      using errcode = 'P0002';
+  end if;
+
+  -- Tenant guard: staff may only move stock within their own store.
+  if not public.is_superadmin()
+     and v_inventory.store_id is distinct from public.current_store_id() then
+    raise exception 'product % is not in your store', p_product_id
+      using errcode = '42501';
+  end if;
+
+  if p_movement = 'in' then
+    v_delta := p_quantity;
+  elsif p_movement = 'out' then
+    v_delta := -p_quantity;
+  elsif p_movement = 'adjustment' then
+    v_delta := p_quantity - v_inventory.current_stock;
+  end if;
+
+  v_new_stock := v_inventory.current_stock + v_delta;
+
+  if v_new_stock < 0 then
+    raise exception 'insufficient stock: have %, requested %',
+      v_inventory.current_stock, p_quantity using errcode = '23514';
+  end if;
+
+  v_barcode := v_inventory.barcode;
+
+  if v_delta = 0 then
+    return v_new_stock;
+  end if;
+
+  insert into public.inventory_movements (
+    store_id, product_id, barcode, movement_type, quantity, resulting_stock,
+    order_id, created_by, notes, barcode_image_url
+  ) values (
+    v_inventory.store_id,
+    p_product_id, v_barcode, p_movement, abs(v_delta), v_new_stock,
+    p_order_id, p_created_by, p_notes, p_barcode_image_url
+  );
+
+  update public.product_inventory
+     set current_stock = v_new_stock, updated_at = now()
+   where product_id = p_product_id;
+
+  return v_new_stock;
+end $$;

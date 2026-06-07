@@ -1,5 +1,6 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentStoreId } from "@/lib/tenant/context";
 
 export type CouponRow = {
   id: string;
@@ -49,14 +50,16 @@ export async function findActiveCouponByCode(
   const supabase = await createClient();
   const upper = code.toUpperCase();
   const nowIso = new Date().toISOString();
-  const { data, error } = await supabase
+  const storeId = await getCurrentStoreId();
+  let query = supabase
     .from("coupons")
     .select("*")
     .eq("code", upper)
     .eq("is_active", true)
     .or(`starts_at.is.null,starts_at.lte.${nowIso}`)
-    .or(`expires_at.is.null,expires_at.gt.${nowIso}`)
-    .maybeSingle<CouponRow>();
+    .or(`expires_at.is.null,expires_at.gt.${nowIso}`);
+  if (storeId) query = query.eq("store_id", storeId);
+  const { data, error } = await query.maybeSingle<CouponRow>();
   if (error) {
     console.error("[coupons.findActive]", error);
     return null;

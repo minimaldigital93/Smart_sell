@@ -17,7 +17,10 @@ export type UpdateSettingsResult =
 export async function updateStoreSettingsAction(
   formData: FormData,
 ): Promise<UpdateSettingsResult> {
-  const { user } = await requireAdmin();
+  const { user, profile } = await requireAdmin();
+  if (!profile.store_id) {
+    return { ok: false, error: "No store is associated with this account." };
+  }
 
   const parsed = storeSettingsFormSchema.safeParse({
     businessName: formData.get("businessName"),
@@ -87,7 +90,7 @@ export async function updateStoreSettingsAction(
       updated_by: user.id,
       ...(logoUrl !== undefined ? { logo_url: logoUrl } : {}),
     })
-    .eq("id", 1);
+    .eq("store_id", profile.store_id);
 
   if (error) {
     return { ok: false, error: "Could not save settings. Please try again." };

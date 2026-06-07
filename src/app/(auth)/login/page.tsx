@@ -17,12 +17,20 @@ export default async function LoginPage(props: { searchParams: SearchParams }) {
       title="Welcome back"
       description="Sign in to continue your shopping or manage your store."
       footer={
-        <span>
-          New here?{" "}
-          <Link href="/register" className="font-medium text-foreground underline-offset-4 hover:underline">
-            Create an account
-          </Link>
-        </span>
+        <div className="flex flex-col gap-1">
+          <span>
+            New here?{" "}
+            <Link href="/register" className="font-medium text-foreground underline-offset-4 hover:underline">
+              Create an account
+            </Link>
+          </span>
+          <span>
+            Want to sell?{" "}
+            <Link href="/start" className="font-medium text-foreground underline-offset-4 hover:underline">
+              Start your store
+            </Link>
+          </span>
+        </div>
       }
     >
       {sp.registered ? (

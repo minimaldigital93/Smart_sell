@@ -31,7 +31,26 @@ export const ORDER_STATUSES = [
 ] as const;
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
 
-export const USER_ROLES = ["admin", "staff", "customer"] as const;
+export const USER_ROLES = ["superadmin", "admin", "staff", "customer"] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 
 export const SHIPPING_FEE_DEFAULT = 2;
+
+/** Reserved store slug for the original single-tenant data (see migration 0033). */
+export const DEFAULT_STORE_SLUG = "default";
+
+/** Lifecycle states for a store/tenant. Mirrors stores.status + grace/lock. */
+export const STORE_STATUSES = [
+  "trial",
+  "active",
+  "grace",
+  "locked",
+  "cancelled",
+] as const;
+export type StoreStatus = (typeof STORE_STATUSES)[number];
+
+/** Free-trial length for a newly registered store (days). */
+export const TRIAL_DAYS = 14;
+
+/** Days a lapsed store stays usable (with a banner) before it locks. */
+export const GRACE_DAYS = 3;

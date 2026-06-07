@@ -56,6 +56,10 @@ export async function requireRole(
 }
 
 export const requireStaff = (redirectTo = "/admin") =>
-  requireRole(["admin", "staff"], redirectTo);
+  requireRole(["admin", "staff", "superadmin"], redirectTo);
 export const requireAdmin = (redirectTo = "/admin") =>
-  requireRole(["admin"], redirectTo);
+  requireRole(["admin", "superadmin"], redirectTo);
+
+/** Redirects home unless the signed-in user is the platform superadmin. */
+export const requireSuperadmin = (redirectTo = "/superadmin") =>
+  requireRole(["superadmin"], redirectTo);
