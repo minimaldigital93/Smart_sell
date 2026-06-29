@@ -17,7 +17,7 @@ export function MobileBottomNav() {
 
   return (
     <nav
-      className="sticky bottom-0 z-40 mt-auto border-t border-border bg-background safe-pb"
+      className="sticky bottom-0 z-40 mt-auto border-t border-border bg-background/90 backdrop-blur-xl safe-pb md:hidden"
       aria-label="Primary"
     >
       <ul className="mx-auto flex max-w-md items-stretch justify-between px-2 py-1">

@@ -32,8 +32,8 @@ export function WishlistView() {
 
   if (isFetching && ids.length > 0) {
     return (
-      <div className="grid grid-cols-2 gap-3">
-        {Array.from({ length: 4 }).map((_, i) => (
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:gap-4 lg:grid-cols-4 2xl:grid-cols-5">
+        {Array.from({ length: 5 }).map((_, i) => (
           <div
             key={i}
             className="aspect-3/4 animate-pulse rounded-2xl bg-muted"
@@ -61,7 +61,7 @@ export function WishlistView() {
 
   return (
     <>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:gap-4 lg:grid-cols-4 2xl:grid-cols-5">
         {products.map((p) => (
           <ProductCard key={p.id} product={p} />
         ))}

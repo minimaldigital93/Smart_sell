@@ -37,6 +37,11 @@
   --color-pink-400: #d49097;
   --color-pink-500: #b56a72;
 
+  /* Desktop boundary per product spec: laptop 1024–1439, desktop 1440+.
+     md (768) and lg (1024) keep their Tailwind defaults; only the top stop
+     is retuned so `2xl:` utilities engage at the desktop breakpoint. */
+  --breakpoint-2xl: 1440px;
+
   --radius-xs: 0.5rem;
   --radius-sm: 0.75rem;
   --radius-md: 1rem;

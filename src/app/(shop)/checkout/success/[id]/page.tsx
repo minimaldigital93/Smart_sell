@@ -21,7 +21,7 @@ export default async function OrderSuccessPage({ params }: { params: Params }) {
   const { currency } = await getStoreSettings();
 
   return (
-    <div className="flex flex-col gap-6 pt-2">
+    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 pt-2">
       <ClearCartOnMount />
 
       <header className="flex flex-col items-center gap-3 text-center">

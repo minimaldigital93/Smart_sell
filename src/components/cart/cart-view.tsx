@@ -14,19 +14,21 @@ export function CartView() {
   if (items.length === 0) return <EmptyCart />;
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-5 lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start lg:gap-8">
       <ul className="flex flex-col gap-3">
         {items.map((item) => (
           <CartLineItem key={item.productId} item={item} />
         ))}
       </ul>
-      <CartSummary />
-      <Link
-        href="/checkout"
-        className={cn(buttonVariants({ size: "lg" }), "w-full")}
-      >
-        Proceed to checkout
-      </Link>
+      <div className="flex flex-col gap-4 lg:sticky lg:top-24">
+        <CartSummary />
+        <Link
+          href="/checkout"
+          className={cn(buttonVariants({ size: "lg" }), "w-full")}
+        >
+          Proceed to checkout
+        </Link>
+      </div>
     </div>
   );
 }

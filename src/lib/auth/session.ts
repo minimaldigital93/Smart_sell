@@ -4,6 +4,44 @@ import { createClient } from "@/lib/supabase/server";
 import type { Profile } from "@/types";
 import type { UserRoleEnum } from "@/types/database";
 
+/**
+ * The default landing path for a role after authentication:
+ * superadmin → platform console, admin/staff → store dashboard, everyone
+ * else → their account. Keep this in sync wherever we route post-login.
+ */
+export function dashboardPathForRole(
+  role: UserRoleEnum | string | null | undefined,
+): string {
+  switch (role) {
+    case "superadmin":
+      return "/superadmin";
+    case "admin":
+    case "staff":
+      return "/admin";
+    default:
+      return "/account";
+  }
+}
+
+// Generic landing targets that any role can be bounced from (the storefront
+// home and the customer account tab). For privileged roles these must defer to
+// the role's own dashboard rather than pin them to a customer page.
+const GENERIC_LANDING = new Set(["/", "/account"]);
+
+/**
+ * Where to send a freshly-authenticated user: honor an explicit deep-link the
+ * user was bounced from (e.g. `/admin/orders`), but for the generic landing
+ * targets ("/", "/account") route by role so admins/superadmins reach their
+ * dashboard instead of the storefront/account page.
+ */
+export function postLoginDestination(
+  role: UserRoleEnum | string | null | undefined,
+  requested?: string | null,
+): string {
+  if (requested && !GENERIC_LANDING.has(requested)) return requested;
+  return dashboardPathForRole(role);
+}
+
 export async function getCurrentUser(): Promise<User | null> {
   const supabase = await createClient();
   const { data } = await supabase.auth.getUser();

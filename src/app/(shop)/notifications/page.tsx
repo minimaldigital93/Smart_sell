@@ -11,7 +11,7 @@ export default async function NotificationsPage() {
   const notifications = await listNotifications(50);
 
   return (
-    <div className="flex flex-col gap-5 pt-2">
+    <div className="mx-auto flex w-full max-w-2xl flex-col gap-5 pt-2">
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">Notifications</h1>
       </header>

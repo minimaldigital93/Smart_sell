@@ -18,8 +18,8 @@ export function PnlTable({
   );
 
   return (
-    <div className="bg-card overflow-hidden rounded-2xl border">
-      <table className="w-full text-sm">
+    <div className="bg-card overflow-x-auto rounded-2xl border">
+      <table className="w-full min-w-md text-sm">
         <thead className="bg-muted/40 text-muted-foreground text-xs uppercase tracking-wider">
           <tr>
             <th className="px-4 py-2 text-left font-medium">{periodLabel}</th>

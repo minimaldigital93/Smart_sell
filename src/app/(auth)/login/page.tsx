@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { AuthCard } from "@/components/auth/auth-card";
 import { LoginForm } from "@/components/auth/login-form";
+import { getCurrentProfile, postLoginDestination } from "@/lib/auth/session";
 
 type SearchParams = Promise<{
   redirectTo?: string;
@@ -11,6 +13,13 @@ type SearchParams = Promise<{
 export default async function LoginPage(props: { searchParams: SearchParams }) {
   const sp = await props.searchParams;
   const redirectTo = sp.redirectTo ?? "/";
+
+  // Already signed in? Skip the form and route by role (superadmin → console,
+  // admin/staff → dashboard, otherwise account).
+  const session = await getCurrentProfile();
+  if (session) {
+    redirect(postLoginDestination(session.profile.role, redirectTo));
+  }
 
   return (
     <AuthCard

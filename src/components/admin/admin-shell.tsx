@@ -21,6 +21,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Brand } from "@/components/shared/brand";
+import { Container } from "@/components/shared/container";
+import { NotificationBell } from "@/components/notifications/notification-bell";
 import type { UserRoleEnum } from "@/types/database";
 
 type NavItem = {
@@ -160,8 +162,31 @@ export function AdminShell({
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-3xl flex-1 px-4 pb-24 pt-4 md:pb-8 md:pt-6">
-          {children}
+        {/* Desktop / tablet header */}
+        <header className="sticky top-0 z-20 hidden border-b border-border bg-background/85 backdrop-blur-xl md:block">
+          <Container size="app" className="flex items-center justify-between gap-4 py-3">
+            <p className="text-sm text-muted-foreground">
+              Welcome back,{" "}
+              <span className="font-medium text-foreground">{userName}</span>
+            </p>
+            <div className="flex items-center gap-2">
+              <Link
+                href="/"
+                target="_blank"
+                className="rounded-full px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                View store
+              </Link>
+              <NotificationBell
+                href="/admin/notifications"
+                unreadCount={unreadNotifications}
+              />
+            </div>
+          </Container>
+        </header>
+
+        <main className="flex-1 pb-24 pt-4 md:pb-10 md:pt-6">
+          <Container size="app">{children}</Container>
         </main>
 
         {/* Mobile bottom tab bar: 4 tabs + More */}

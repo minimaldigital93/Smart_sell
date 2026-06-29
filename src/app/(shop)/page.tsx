@@ -184,7 +184,7 @@ export default async function ShopHomePage() {
               </div>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:gap-4 lg:grid-cols-4 2xl:grid-cols-5">
             {promos.map((p) => (
               <ProductCard key={p.id} product={p} />
             ))}
@@ -198,7 +198,7 @@ export default async function ShopHomePage() {
           <div id="latest-heading">
             <SectionHeader icon={Clock} title="New arrivals" href="/shop" />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:gap-4 lg:grid-cols-4 2xl:grid-cols-5">
             {latest.map((p) => (
               <ProductCard key={p.id} product={p} />
             ))}

@@ -41,7 +41,7 @@ export default async function StoreDetailPage({
   ];
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
       <div>
         <Link href="/superadmin/stores" className="text-muted-foreground text-sm">
           ← Stores

@@ -13,7 +13,7 @@ export default async function EditProductPage({ params }: { params: Params }) {
   if (!product) notFound();
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-5">
       <header className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-wider text-muted-foreground">

@@ -39,7 +39,7 @@ export default async function AccountPage(props: { searchParams: SearchParams })
     // Render a sign-in prompt inside the shop layout so the bottom nav stays
     // visible and the user can still reach Home / Cart.
     return (
-      <div className="flex flex-col gap-6 pt-2">
+      <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 pt-2">
         <PageHero
           icon={User}
           title="Account"
@@ -73,7 +73,7 @@ export default async function AccountPage(props: { searchParams: SearchParams })
   ]);
 
   return (
-    <div className="flex flex-col gap-6 pt-2">
+    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 pt-2">
       {/* Profile hero */}
       <section className="relative isolate overflow-hidden rounded-xl bg-linear-to-br from-pink-100 via-nude-50 to-pink-200 p-5 shadow-card">
         <div

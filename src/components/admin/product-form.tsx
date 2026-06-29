@@ -112,7 +112,7 @@ export function ProductForm({ mode, defaults }: Props) {
         <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
           Basics
         </h2>
-        <div className="flex flex-col gap-4">
+        <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <Label htmlFor="name">Name</Label>
             <Input
@@ -139,7 +139,7 @@ export function ProductForm({ mode, defaults }: Props) {
             />
             <FieldError message={errors.slug?.message} />
           </div>
-          <div>
+          <div className="sm:col-span-2">
             <Label htmlFor="category">Category</Label>
             <select
               id="category"

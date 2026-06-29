@@ -7,6 +7,7 @@ import { humanizeAuthError } from "@/lib/auth/errors";
 import { checkRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { normalizePhone, phoneToEmail } from "@/lib/auth/phone";
 import { getCurrentStoreId } from "@/lib/tenant/context";
+import { postLoginDestination } from "@/lib/auth/session";
 import {
   signInSchema,
   signUpSchema,
@@ -42,31 +43,22 @@ export async function signInAction(
   if (error) return { ok: false, error: humanizeAuthError(error) };
 
   // Honor an explicit redirect target (e.g. a protected page the user was
-  // sent here from). Otherwise route by role: admins/staff to the dashboard,
-  // everyone else to their own profile.
-  const requested = (formData.get("redirectTo") as string | null) || "/";
-  let destination = requested;
-  if (requested === "/") {
-    const userId = signInData.user?.id;
-    let role: string | null = null;
-    if (userId) {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", userId)
-        .maybeSingle();
-      role = profile?.role ?? null;
-    }
-    destination =
-      role === "superadmin"
-        ? "/superadmin"
-        : role === "admin" || role === "staff"
-          ? "/admin"
-          : "/account";
+  // sent here from). Otherwise route by role: superadmin to the platform
+  // console, admins/staff to the store dashboard, everyone else to account.
+  const requested = formData.get("redirectTo") as string | null;
+  let role: string | null = null;
+  const userId = signInData.user?.id;
+  if (userId) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", userId)
+      .maybeSingle();
+    role = profile?.role ?? null;
   }
 
   revalidatePath("/", "layout");
-  redirect(destination);
+  redirect(postLoginDestination(role, requested));
 }
 
 export async function signUpAction(

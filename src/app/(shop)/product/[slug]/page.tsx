@@ -54,9 +54,14 @@ export default async function ProductPage({ params }: { params: Params }) {
         </Link>
       </nav>
 
-      <ProductGallery images={product.images} alt={product.name} />
+      {/* Gallery + info sit side-by-side from lg up; stacked on phone/tablet. */}
+      <div className="lg:grid lg:grid-cols-2 lg:items-start lg:gap-8 xl:gap-12">
+        <div className="lg:sticky lg:top-24">
+          <ProductGallery images={product.images} alt={product.name} />
+        </div>
 
-      <header className="flex flex-col gap-3">
+        <div className="mt-6 flex flex-col gap-6 lg:mt-0">
+          <header className="flex flex-col gap-3">
         <Link
           href={`/category/${product.category}`}
           className={cn(
@@ -135,11 +140,13 @@ export default async function ProductPage({ params }: { params: Params }) {
           </p>
         </section>
       ) : null}
+        </div>
+      </div>
 
       {related.length > 0 ? (
         <section className="flex flex-col gap-4">
           <SectionHeader icon={Heart} title="You may also like" />
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:gap-4 lg:grid-cols-4 2xl:grid-cols-5">
             {related.map((p) => (
               <ProductCard key={p.id} product={p} />
             ))}

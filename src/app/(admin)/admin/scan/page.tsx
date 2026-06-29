@@ -12,7 +12,7 @@ export default async function ScanPage(props: { searchParams: SearchParams }) {
     sp.mode === "out" || sp.mode === "lookup" ? sp.mode : "in";
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="mx-auto flex w-full max-w-xl flex-col gap-5">
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">Scan</h1>
         <p className="mt-1 text-sm text-muted-foreground">

@@ -34,7 +34,7 @@ export default async function OrdersPage() {
   const { currency } = await getStoreSettings();
 
   return (
-    <div className="flex flex-col gap-5 pt-2">
+    <div className="mx-auto flex w-full max-w-2xl flex-col gap-5 pt-2">
       <PageHero
         icon={Receipt}
         title="Your orders"

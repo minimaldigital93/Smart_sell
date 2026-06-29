@@ -158,8 +158,12 @@ export async function updateSession(request: NextRequest) {
   }
 
   // ---- 6) Bounce signed-in users away from auth pages ----------------------
+  // Route them to their role's home (superadmin → console, admin/staff →
+  // dashboard) instead of the guest storefront. Mirrors dashboardPathForRole
+  // in lib/auth/session (kept inline because middleware runs on the edge).
   if (isAuthGate && user) {
-    return redirectTo(request, "/");
+    const profile = await loadProfile();
+    return redirectTo(request, dashboardForRole(profile?.role));
   }
 
   // ---- 7) Subscription lock enforcement ------------------------------------
@@ -184,6 +188,22 @@ export async function updateSession(request: NextRequest) {
   }
 
   return response;
+}
+
+/**
+ * Landing path for a role. Mirror of dashboardPathForRole in lib/auth/session;
+ * duplicated here so middleware doesn't import server-only modules.
+ */
+function dashboardForRole(role: string | null | undefined): string {
+  switch (role) {
+    case "superadmin":
+      return "/superadmin";
+    case "admin":
+    case "staff":
+      return "/admin";
+    default:
+      return "/account";
+  }
 }
 
 function redirectTo(request: NextRequest, pathname: string, redirectTo?: string) {

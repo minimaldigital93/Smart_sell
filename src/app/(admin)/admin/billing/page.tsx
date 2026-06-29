@@ -50,7 +50,7 @@ export default async function BillingPage() {
   }));
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">Billing</h1>
         <p className="text-muted-foreground mt-1 text-sm">

@@ -68,9 +68,12 @@ export default async function AdminDashboardPage() {
         />
       </section>
 
-      <SalesChart data={salesByDay} />
-
-      <LowStockList rows={lowStock} />
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+        <div className="xl:col-span-2">
+          <SalesChart data={salesByDay} />
+        </div>
+        <LowStockList rows={lowStock} />
+      </div>
     </div>
   );
 }

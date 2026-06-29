@@ -12,7 +12,7 @@ export default async function SettingsPage() {
   const [settings, store] = await Promise.all([getStoreSettings(), getMyStore()]);
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto w-full max-w-3xl space-y-6">
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
         <p className="text-sm text-muted-foreground">

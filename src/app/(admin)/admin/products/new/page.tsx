@@ -4,7 +4,7 @@ export const metadata = { title: "New product" };
 
 export default function NewProductPage() {
   return (
-    <div className="flex flex-col gap-5">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-5">
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">New product</h1>
         <p className="mt-1 text-sm text-muted-foreground">

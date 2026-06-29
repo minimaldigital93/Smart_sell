@@ -8,19 +8,23 @@ import { Brand } from "@/components/shared/brand";
 import { NotificationBell } from "@/components/notifications/notification-bell";
 import { NotificationsRealtime } from "@/components/notifications/notifications-realtime";
 import { LanguageSwitcher } from "@/components/shared/language-switcher";
+import { Container } from "@/components/shared/container";
+import { ShopNav } from "@/components/shared/shop-nav";
 
 export async function ShopTopBar() {
   const settings = await getStoreSettings();
   return (
-    <header className="sticky top-0 z-30 border-b border-border/70 bg-background safe-pt">
-      <div className="mx-auto flex max-w-md items-center justify-between gap-3 px-4 py-3">
-        <Link href="/">
+    <header className="sticky top-0 z-30 border-b border-border/70 bg-background/85 backdrop-blur-xl safe-pt">
+      <Container size="shop" className="flex items-center justify-between gap-3 py-3">
+        <Link href="/" className="shrink-0">
           <Brand
             businessName={settings.businessName}
             logoUrl={settings.logoUrl}
             textClassName="text-lg"
           />
         </Link>
+        {/* Tablet/desktop primary nav; phones use the bottom tab bar. */}
+        <ShopNav />
         <div className="flex items-center gap-2">
           <LanguageSwitcher />
           <Suspense fallback={null}>
@@ -34,7 +38,7 @@ export async function ShopTopBar() {
             <Search className="h-5 w-5" />
           </Link>
         </div>
-      </div>
+      </Container>
     </header>
   );
 }
