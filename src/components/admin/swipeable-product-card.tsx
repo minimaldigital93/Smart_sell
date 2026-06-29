@@ -5,8 +5,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Trash2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
-import type { Product } from "@/types";
-import { CATEGORIES } from "@/lib/constants";
+import type { ProductWithCategory } from "@/types";
 import { cn } from "@/lib/utils";
 import { useFormatPrice } from "@/lib/settings/store-config";
 import {
@@ -14,15 +13,15 @@ import {
   restoreProductAction,
 } from "@/app/actions/products";
 
-function categoryLabel(slug: string) {
-  return CATEGORIES.find((c) => c.slug === slug)?.label ?? slug;
-}
-
 const ACTION_WIDTH = 88;
 const OPEN_THRESHOLD = 44;
 const SWIPE_TRIGGER = 8;
 
-export function SwipeableProductCard({ product }: { product: Product }) {
+export function SwipeableProductCard({
+  product,
+}: {
+  product: ProductWithCategory;
+}) {
   const router = useRouter();
   const formatPrice = useFormatPrice();
   const [offset, setOffset] = useState(0);
@@ -188,7 +187,7 @@ export function SwipeableProductCard({ product }: { product: Product }) {
         <div className="min-w-0 flex-1">
           <p className="line-clamp-1 text-sm font-medium">{product.name}</p>
           <p className="text-xs text-muted-foreground">
-            {categoryLabel(product.category)} · stock {product.stock}
+            {product.shop_categories?.name ?? "—"} · stock {product.stock}
           </p>
           <p className="mt-1 text-sm font-semibold tabular-nums">
             {formatPrice(product.discount_price ?? product.price)}

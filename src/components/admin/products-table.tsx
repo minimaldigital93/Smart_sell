@@ -1,18 +1,17 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Pencil } from "lucide-react";
-import type { Product } from "@/types";
-import { CATEGORIES } from "@/lib/constants";
+import type { ProductWithCategory } from "@/types";
 import { formatPrice } from "@/lib/utils";
 import { getStoreSettings } from "@/services/settings";
 import { EmptyState } from "@/components/shop/empty-state";
 import { SwipeableProductCard } from "@/components/admin/swipeable-product-card";
 
-function categoryLabel(slug: string) {
-  return CATEGORIES.find((c) => c.slug === slug)?.label ?? slug;
-}
-
-export async function ProductsTable({ products }: { products: Product[] }) {
+export async function ProductsTable({
+  products,
+}: {
+  products: ProductWithCategory[];
+}) {
   const { currency } = await getStoreSettings();
   if (products.length === 0) {
     return (
@@ -63,7 +62,7 @@ export async function ProductsTable({ products }: { products: Product[] }) {
                   </div>
                 </td>
                 <td className="px-3 py-3 text-muted-foreground">
-                  {categoryLabel(p.category)}
+                  {p.shop_categories?.name ?? "—"}
                 </td>
                 <td className="px-3 py-3 text-right tabular-nums">
                   <span className="font-medium">

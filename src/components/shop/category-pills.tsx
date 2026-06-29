@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { CATEGORIES } from "@/lib/constants";
+import { listActiveCategories } from "@/services/categories";
 import { cn } from "@/lib/utils";
 
-export function CategoryPills({ activeSlug }: { activeSlug?: string }) {
+export async function CategoryPills({ activeSlug }: { activeSlug?: string }) {
+  const categories = await listActiveCategories();
   return (
     <nav
       aria-label="Categories"
@@ -19,9 +20,9 @@ export function CategoryPills({ activeSlug }: { activeSlug?: string }) {
       >
         All
       </Link>
-      {CATEGORIES.map((c) => (
+      {categories.map((c) => (
         <Link
-          key={c.slug}
+          key={c.id}
           href={`/category/${c.slug}`}
           className={cn(
             "shrink-0 rounded-full border px-4 py-2 text-sm font-medium transition-colors",
@@ -30,7 +31,7 @@ export function CategoryPills({ activeSlug }: { activeSlug?: string }) {
               : "border-border bg-card text-foreground hover:bg-muted",
           )}
         >
-          {c.label}
+          {c.name}
         </Link>
       ))}
     </nav>

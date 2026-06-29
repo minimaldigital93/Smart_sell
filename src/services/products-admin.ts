@@ -1,23 +1,22 @@
 import { createClient } from "@/lib/supabase/server";
-import type { Product } from "@/types";
-import type { ProductCategoryEnum } from "@/types/database";
+import type { Product, ProductWithCategory } from "@/types";
 
 export async function listProductsForAdmin(opts: {
   q?: string;
-  category?: ProductCategoryEnum;
+  category?: string;
   includeInactive?: boolean;
   limit?: number;
-}): Promise<Product[]> {
+}): Promise<ProductWithCategory[]> {
   const { q, category, includeInactive = true, limit = 100 } = opts;
   const supabase = await createClient();
   let qb = supabase
     .from("products")
-    .select("*")
+    .select("*, shop_categories(id, name, slug, icon, color)")
     .order("created_at", { ascending: false })
     .limit(limit);
 
   if (!includeInactive) qb = qb.eq("is_active", true);
-  if (category) qb = qb.eq("category", category);
+  if (category) qb = qb.eq("category_id", category);
   if (q && q.trim()) {
     const escaped = q.trim().replace(/[%_]/g, (m) => `\\${m}`);
     const pattern = `%${escaped}%`;
@@ -31,7 +30,7 @@ export async function listProductsForAdmin(opts: {
     console.error("[products-admin.list]", error);
     return [];
   }
-  return data ?? [];
+  return (data ?? []) as ProductWithCategory[];
 }
 
 export async function getProductByIdAdmin(id: string): Promise<Product | null> {

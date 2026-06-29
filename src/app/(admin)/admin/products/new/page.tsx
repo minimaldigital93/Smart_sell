@@ -1,8 +1,10 @@
 import { ProductForm } from "@/components/admin/product-form";
+import { listActiveCategories } from "@/services/categories";
 
 export const metadata = { title: "New product" };
 
-export default function NewProductPage() {
+export default async function NewProductPage() {
+  const categories = await listActiveCategories();
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-5">
       <header>
@@ -12,7 +14,7 @@ export default function NewProductPage() {
           set to active.
         </p>
       </header>
-      <ProductForm mode="new" />
+      <ProductForm mode="new" categories={categories} />
     </div>
   );
 }

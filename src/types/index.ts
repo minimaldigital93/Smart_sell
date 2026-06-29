@@ -3,6 +3,22 @@ import type { Database } from "@/types/database";
 export type Product = Database["public"]["Tables"]["products"]["Row"];
 export type ProductInsert = Database["public"]["Tables"]["products"]["Insert"];
 
+export type ShopCategory =
+  Database["public"]["Tables"]["shop_categories"]["Row"];
+export type ShopCategoryInsert =
+  Database["public"]["Tables"]["shop_categories"]["Insert"];
+
+/** Minimal category fields embedded into product rows for label/icon display. */
+export type ProductCategoryRef = Pick<
+  ShopCategory,
+  "id" | "name" | "slug" | "icon" | "color"
+>;
+
+/** A product row with its category joined (Supabase embedded select). */
+export type ProductWithCategory = Product & {
+  shop_categories: ProductCategoryRef | null;
+};
+
 export type ProductInventory =
   Database["public"]["Tables"]["product_inventory"]["Row"];
 

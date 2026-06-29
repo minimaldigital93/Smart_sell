@@ -7,8 +7,7 @@ import { ProductGallery } from "@/components/shop/product-gallery";
 import { ProductDetailActions } from "@/components/shop/product-detail-actions";
 import { ProductCard } from "@/components/shop/product-card";
 import { SectionHeader } from "@/components/shared/section-header";
-import { CATEGORIES } from "@/lib/constants";
-import { CATEGORY_META } from "@/lib/categories";
+import { categoryVisual } from "@/lib/categories";
 import { cn } from "@/lib/utils";
 
 type Params = Promise<{ slug: string }>;
@@ -30,10 +29,15 @@ export default async function ProductPage({ params }: { params: Params }) {
   if (!product) notFound();
 
   const related = await getRelatedProducts(product, 4);
-  const categoryLabel =
-    CATEGORIES.find((c) => c.slug === product.category)?.label ?? product.category;
-  const meta = CATEGORY_META[product.category as keyof typeof CATEGORY_META];
-  const CategoryIcon = meta?.icon;
+  const category = product.shop_categories;
+  const categoryLabel = category?.name ?? "Shop";
+  const categoryHref = category?.slug ? `/category/${category.slug}` : "/shop";
+  const visual = categoryVisual({
+    slug: category?.slug,
+    icon: category?.icon,
+    color: category?.color,
+  });
+  const CategoryIcon = visual.Icon;
   const outOfStock = product.stock <= 0;
   const lowStock = !outOfStock && product.stock <= 5;
   const cover = product.images[0] ?? null;
@@ -46,10 +50,7 @@ export default async function ProductPage({ params }: { params: Params }) {
           Shop
         </Link>
         <span className="px-1">/</span>
-        <Link
-          href={`/category/${product.category}`}
-          className="hover:text-foreground"
-        >
+        <Link href={categoryHref} className="hover:text-foreground">
           {categoryLabel}
         </Link>
       </nav>
@@ -63,15 +64,16 @@ export default async function ProductPage({ params }: { params: Params }) {
         <div className="mt-6 flex flex-col gap-6 lg:mt-0">
           <header className="flex flex-col gap-3">
         <Link
-          href={`/category/${product.category}`}
+          href={categoryHref}
           className={cn(
             "inline-flex w-fit items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold text-secondary-foreground shadow-soft transition-transform active:scale-[0.97] bg-linear-to-r",
-            meta?.bannerGradient ?? "from-pink-100 to-nude-100",
+            visual.bannerGradient,
           )}
         >
-          {CategoryIcon ? (
-            <CategoryIcon className={cn("h-3.5 w-3.5", meta?.iconClass)} />
-          ) : null}
+          <CategoryIcon
+            className={cn("h-3.5 w-3.5", visual.color ? undefined : visual.iconClass)}
+            style={visual.color ? { color: visual.color } : undefined}
+          />
           {categoryLabel}
         </Link>
 

@@ -1,24 +1,27 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { listProductsForAdmin } from "@/services/products-admin";
+import { listActiveCategories } from "@/services/categories";
 import { ProductsToolbar } from "@/components/admin/products-toolbar";
 import { ProductsTable } from "@/components/admin/products-table";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { ProductCategoryEnum } from "@/types/database";
 
 export const dynamic = "force-dynamic";
 
-type SearchParams = Promise<{ q?: string; category?: ProductCategoryEnum }>;
+type SearchParams = Promise<{ q?: string; category?: string }>;
 
 export default async function AdminProductsPage(props: {
   searchParams: SearchParams;
 }) {
   const sp = await props.searchParams;
-  const products = await listProductsForAdmin({
-    q: sp.q,
-    category: sp.category,
-  });
+  const [products, categories] = await Promise.all([
+    listProductsForAdmin({
+      q: sp.q,
+      category: sp.category,
+    }),
+    listActiveCategories(),
+  ]);
 
   return (
     <div className="flex flex-col gap-5">
@@ -38,7 +41,7 @@ export default async function AdminProductsPage(props: {
         </Link>
       </header>
 
-      <ProductsToolbar />
+      <ProductsToolbar categories={categories} />
       <ProductsTable products={products} />
     </div>
   );

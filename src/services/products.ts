@@ -1,8 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentStoreId } from "@/lib/tenant/context";
-import type { Product } from "@/types";
-import type { Database, ProductCategoryEnum } from "@/types/database";
+import type { Product, ProductWithCategory } from "@/types";
+import type { Database } from "@/types/database";
+
+/** Embedded category fields selected alongside a product for label/icon use. */
+const CATEGORY_EMBED = "shop_categories(id, name, slug, icon, color)";
 
 /**
  * Base storefront query: active products scoped to the current store. Anonymous
@@ -77,12 +80,12 @@ export async function getAllProducts(limit = 48): Promise<Product[]> {
 }
 
 export async function getProductsByCategory(
-  category: ProductCategoryEnum,
+  categoryId: string,
   limit = 48,
 ): Promise<Product[]> {
   const { supabase, storeId } = await ctx();
   const { data, error } = await activeProducts(supabase, storeId)
-    .eq("category", category)
+    .eq("category_id", categoryId)
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) {
@@ -92,16 +95,22 @@ export async function getProductsByCategory(
   return data ?? [];
 }
 
-export async function getProductBySlug(slug: string): Promise<Product | null> {
+export async function getProductBySlug(
+  slug: string,
+): Promise<ProductWithCategory | null> {
   const { supabase, storeId } = await ctx();
-  const { data, error } = await activeProducts(supabase, storeId)
-    .eq("slug", slug)
-    .maybeSingle();
+  let q = supabase
+    .from("products")
+    .select(`*, ${CATEGORY_EMBED}`)
+    .eq("is_active", true)
+    .eq("slug", slug);
+  if (storeId) q = q.eq("store_id", storeId);
+  const { data, error } = await q.maybeSingle();
   if (error) {
     console.error("[products.bySlug]", error);
     return null;
   }
-  return data;
+  return data as ProductWithCategory | null;
 }
 
 export async function getProductByBarcode(
@@ -119,12 +128,12 @@ export async function getProductByBarcode(
 }
 
 export async function getRelatedProducts(
-  product: Pick<Product, "id" | "category">,
+  product: Pick<Product, "id" | "category_id">,
   limit = 6,
 ): Promise<Product[]> {
   const { supabase, storeId } = await ctx();
   const { data, error } = await activeProducts(supabase, storeId)
-    .eq("category", product.category)
+    .eq("category_id", product.category_id)
     .neq("id", product.id)
     .order("created_at", { ascending: false })
     .limit(limit);

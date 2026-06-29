@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { ChevronRight, Tags } from "lucide-react";
 import { requireAdmin } from "@/lib/auth/session";
 import { getStoreSettings } from "@/services/settings";
 import { getMyStore } from "@/services/stores";
@@ -20,6 +22,23 @@ export default async function SettingsPage() {
         </p>
       </header>
       <SettingsForm settings={settings} />
+
+      <Link
+        href="/admin/settings/categories"
+        className="flex items-center gap-4 rounded-2xl border border-border bg-card p-5 shadow-soft transition hover:bg-muted/40"
+      >
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
+          <Tags className="h-5 w-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-medium">Shop Categories</span>
+          <span className="block text-sm text-muted-foreground">
+            Create and manage the product categories used across your store.
+          </span>
+        </span>
+        <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
+      </Link>
+
       <CustomDomain
         domain={store?.custom_domain ?? null}
         verified={store?.domain_verified ?? false}

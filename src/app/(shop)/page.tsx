@@ -10,8 +10,7 @@ import {
   Flame,
   Clock,
 } from "lucide-react";
-import { CATEGORIES } from "@/lib/constants";
-import { CATEGORY_META } from "@/lib/categories";
+import { categoryVisual } from "@/lib/categories";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
 import { ProductCard } from "@/components/shop/product-card";
@@ -21,6 +20,7 @@ import {
   getPromoProducts,
   getNewArrivalProducts,
 } from "@/services/products";
+import { listActiveCategories } from "@/services/categories";
 
 export const revalidate = 60;
 
@@ -31,10 +31,11 @@ const PERKS = [
 ] as const;
 
 export default async function ShopHomePage() {
-  const [featured, promos, latest] = await Promise.all([
+  const [featured, promos, latest, categories] = await Promise.all([
     getFeaturedProducts(8),
     getPromoProducts(6),
     getNewArrivalProducts(6),
+    listActiveCategories(),
   ]);
 
   const isEmpty =
@@ -118,34 +119,46 @@ export default async function ShopHomePage() {
       </section>
 
       {/* Categories */}
+      {categories.length > 0 ? (
       <section aria-labelledby="categories-heading" className="flex flex-col gap-4">
         <div id="categories-heading">
           <SectionHeader title="Shop by category" href="/shop" />
         </div>
         <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-1 no-scrollbar">
-          {CATEGORIES.map((c) => {
-            const meta = CATEGORY_META[c.slug];
-            const Icon = meta.icon;
+          {categories.map((c) => {
+            const visual = categoryVisual({
+              slug: c.slug,
+              icon: c.icon,
+              color: c.color,
+            });
+            const Icon = visual.Icon;
             return (
               <Link
-                key={c.slug}
+                key={c.id}
                 href={`/category/${c.slug}`}
                 className={cn(
                   "group flex w-24 shrink-0 flex-col items-center gap-2.5 rounded-3xl bg-linear-to-b p-3 shadow-soft transition-transform active:scale-[0.97]",
-                  meta.gradient,
+                  visual.gradient,
                 )}
               >
                 <span className="grid h-14 w-14 place-items-center rounded-full bg-white/80 shadow-soft backdrop-blur transition-transform group-hover:scale-105">
-                  <Icon className={cn("h-6 w-6", meta.iconClass)} />
+                  <Icon
+                    className={cn(
+                      "h-6 w-6",
+                      visual.color ? undefined : visual.iconClass,
+                    )}
+                    style={visual.color ? { color: visual.color } : undefined}
+                  />
                 </span>
                 <span className="text-center text-[12px] font-semibold leading-tight text-secondary-foreground">
-                  {c.label}
+                  {c.name}
                 </span>
               </Link>
             );
           })}
         </div>
       </section>
+      ) : null}
 
       {/* Featured — horizontal carousel for a premium browse feel */}
       {featured.length > 0 ? (

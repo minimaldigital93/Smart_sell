@@ -107,7 +107,8 @@ export type Database = {
           price: number;
           discount_price: number | null;
           stock: number;
-          category: ProductCategoryEnum;
+          category: ProductCategoryEnum | null;
+          category_id: string;
           images: string[];
           barcode: string | null;
           sku: string | null;
@@ -120,10 +121,72 @@ export type Database = {
         };
         Insert: Omit<
           Database["public"]["Tables"]["products"]["Row"],
-          "id" | "created_at" | "updated_at" | "stock" | "store_id"
-        > & { id?: string; stock?: number; store_id?: string };
+          | "id"
+          | "created_at"
+          | "updated_at"
+          | "stock"
+          | "store_id"
+          | "category"
+        > & {
+          id?: string;
+          stock?: number;
+          store_id?: string;
+          category?: ProductCategoryEnum | null;
+        };
         Update: Partial<Database["public"]["Tables"]["products"]["Row"]>;
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "products_category_id_fkey";
+            columns: ["category_id"];
+            referencedRelation: "shop_categories";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      shop_categories: {
+        Row: {
+          id: string;
+          store_id: string;
+          name: string;
+          slug: string;
+          description: string | null;
+          icon: string | null;
+          color: string | null;
+          display_order: number;
+          is_active: boolean;
+          created_by: string | null;
+          updated_by: string | null;
+          created_at: Timestamp;
+          updated_at: Timestamp;
+          deleted_at: Timestamp | null;
+        };
+        Insert: Omit<
+          Database["public"]["Tables"]["shop_categories"]["Row"],
+          | "id"
+          | "created_at"
+          | "updated_at"
+          | "store_id"
+          | "created_by"
+          | "updated_by"
+          | "deleted_at"
+        > & {
+          id?: string;
+          store_id?: string;
+          created_by?: string | null;
+          updated_by?: string | null;
+          deleted_at?: string | null;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["shop_categories"]["Row"]
+        >;
+        Relationships: [
+          {
+            foreignKeyName: "shop_categories_store_id_fkey";
+            columns: ["store_id"];
+            referencedRelation: "stores";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       product_inventory: {
         Row: {

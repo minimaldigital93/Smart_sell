@@ -1,10 +1,4 @@
 import { z } from "zod";
-import { CATEGORIES } from "@/lib/constants";
-
-const categorySlugs = CATEGORIES.map((c) => c.slug) as [
-  (typeof CATEGORIES)[number]["slug"],
-  ...(typeof CATEGORIES)[number]["slug"][],
-];
 
 export const productInputSchema = z
   .object({
@@ -20,7 +14,7 @@ export const productInputSchema = z
       .or(z.literal("")),
     description: z.string().trim().max(4000).optional().or(z.literal("")),
     ingredients: z.string().trim().max(4000).optional().or(z.literal("")),
-    category: z.enum(categorySlugs),
+    category_id: z.string().uuid("Select a category"),
     price: z.coerce.number().positive("Price must be greater than 0"),
     discount_price: z
       .union([z.coerce.number().nonnegative(), z.literal("")])

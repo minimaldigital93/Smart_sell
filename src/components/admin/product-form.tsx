@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
@@ -14,7 +15,7 @@ import {
 
 type FormInput = z.input<typeof productInputSchema>;
 import { generateEan13, slugify } from "@/lib/products/barcode";
-import { CATEGORIES } from "@/lib/constants";
+import type { ShopCategory } from "@/types";
 import {
   createProductAction,
   updateProductAction,
@@ -28,10 +29,11 @@ import { BarcodeScanner } from "@/components/admin/scanner/barcode-scanner";
 
 type Props = {
   mode: "new" | "edit";
+  categories: Pick<ShopCategory, "id" | "name">[];
   defaults?: Partial<ProductInputValues> & { id?: string };
 };
 
-export function ProductForm({ mode, defaults }: Props) {
+export function ProductForm({ mode, categories, defaults }: Props) {
   "use no memo";
   const router = useRouter();
   const productId = useMemo(
@@ -57,7 +59,7 @@ export function ProductForm({ mode, defaults }: Props) {
       slug: defaults?.slug ?? "",
       description: defaults?.description ?? "",
       ingredients: defaults?.ingredients ?? "",
-      category: defaults?.category ?? "skincare",
+      category_id: defaults?.category_id ?? categories[0]?.id ?? "",
       price: defaults?.price ?? 0,
       discount_price: defaults?.discount_price ?? "",
       barcode: defaults?.barcode ?? "",
@@ -140,19 +142,32 @@ export function ProductForm({ mode, defaults }: Props) {
             <FieldError message={errors.slug?.message} />
           </div>
           <div className="sm:col-span-2">
-            <Label htmlFor="category">Category</Label>
-            <select
-              id="category"
-              {...register("category")}
-              className="h-12 w-full rounded-2xl border border-input bg-background px-4 text-[15px] focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30"
-            >
-              {CATEGORIES.map((c) => (
-                <option key={c.slug} value={c.slug}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-            <FieldError message={errors.category?.message} />
+            <Label htmlFor="category_id">Category</Label>
+            {categories.length > 0 ? (
+              <select
+                id="category_id"
+                {...register("category_id")}
+                className="h-12 w-full rounded-2xl border border-input bg-background px-4 text-[15px] focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30"
+              >
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <p className="rounded-2xl border border-dashed border-input bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+                No categories yet. Create one in{" "}
+                <Link
+                  href="/admin/settings/categories/new"
+                  className="font-medium text-foreground underline"
+                >
+                  Settings → Shop Categories
+                </Link>{" "}
+                first.
+              </p>
+            )}
+            <FieldError message={errors.category_id?.message} />
           </div>
         </div>
       </section>
