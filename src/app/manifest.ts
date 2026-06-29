@@ -12,11 +12,15 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
   const name = settings.businessName;
   const tagline = settings.tagline || APP_TAGLINE;
 
+  // The manifest body is raw JSON Next does not rewrite, so when the app is
+  // served under a sub-path we must prefix in-app URLs ourselves.
+  const base = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+
   const bundledIcons: MetadataRoute.Manifest["icons"] = [
-    { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
-    { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+    { src: `${base}/icons/icon-192.png`, sizes: "192x192", type: "image/png" },
+    { src: `${base}/icons/icon-512.png`, sizes: "512x512", type: "image/png" },
     {
-      src: "/icons/icon-maskable.png",
+      src: `${base}/icons/icon-maskable.png`,
       sizes: "512x512",
       type: "image/png",
       purpose: "maskable",
@@ -35,7 +39,7 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
     short_name: name,
     description:
       "Premium cosmetic store with smart inventory and barcode stock management.",
-    start_url: "/",
+    start_url: `${base}/`,
     display: "standalone",
     background_color: "#ffffff",
     theme_color: "#ffffff",

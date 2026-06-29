@@ -12,6 +12,10 @@ const supabaseHost = (() => {
 
 const isProd = process.env.NODE_ENV === "production";
 
+// When the app is served under a sub-path (e.g. minimaldigital.dev/smart_sell)
+// set NEXT_PUBLIC_BASE_PATH=/smart_sell. Empty/unset = served at the host root.
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH || undefined;
+
 const csp = [
   "default-src 'self'",
   // Next.js needs eval'd inline scripts for hydration; Tailwind v4 injects
@@ -58,6 +62,7 @@ if (isProd) {
 }
 
 const nextConfig: NextConfig = {
+  basePath,
   reactStrictMode: true,
   allowedDevOrigins: ["10.10.10.198", "192.168.0.12", "*.local"],
   images: {
