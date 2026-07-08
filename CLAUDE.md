@@ -30,7 +30,7 @@ The final application must feel:
 
 # PHASE PROGRESS
 
-Last updated: 2026-06-07 (multi-tenant SaaS transformation: platform `superadmin` role, per-store tenancy, subscription billing via Bakong KHQR, platform finance; migrations 0031–0040). Status reflects code present in the repo, not necessarily QA-verified.
+Last updated: 2026-07-08 (Phase 15 started: migrating the database off Supabase cloud to a self-hosted Supabase stack on the production Mac mini — see **DEPLOYMENT & INFRASTRUCTURE**). Status reflects code present in the repo, not necessarily QA-verified.
 
 | Phase | Area | Status |
 |-------|------|--------|
@@ -48,6 +48,7 @@ Last updated: 2026-06-07 (multi-tenant SaaS transformation: platform `superadmin
 | 12 | Security + Performance (lib/security, PWA manifest, offline page, sw.js) | ✅ Done |
 | 13 | Optional Advanced — done: coupons (admin CRUD + checkout redeem), wishlist, Khmer i18n, POS (cash payment method + admin/pos), Telegram helper (`lib/notifications/telegram.ts`, best-effort, env-gated), loyalty points (earn on delivered, redeem at checkout — `lib/loyalty`, `services/loyalty.ts`, `actions/loyalty.ts`, migration 0020), store settings + branding/theme (per-store `store_settings`, admin/settings page, `lib/settings`, `services/settings.ts`, `actions/settings.ts`, 6 curated theme presets in `lib/theme/presets.ts`, `branding` storage bucket, migrations 0028/0035), **multi-store** (see Phase 14). Pending: supplier management, expiration tracking, advanced analytics. | 🟡 Partial |
 | 14 | **Multi-tenant SaaS Platform** — superadmin role + `stores` tenant root; per-store scoping on every table with per-store unique slug/sku/barcode/coupon; tenant-aware RLS + SECURITY DEFINER helpers; subscription billing (3 plans, Bakong KHQR or manual proof); store-owner onboarding (pay-first, no trial); custom domain / `/s/{slug}` routing; superadmin console (stores, subscriptions, plans, users, finance); platform finance (subscription revenue − platform expenses). Migrations 0033–0040. See **MULTI-TENANT SaaS PLATFORM** section. | ✅ Done |
+| 15 | **Self-hosted Supabase migration** — move the backend from Supabase cloud (project `tpqyzuudllxdwqyurdfi`) to a self-hosted Supabase docker stack on the production Mac mini. No app code changes — env swap only. Stack configured and storage mirrored; blocked on cloud DB dump (needs owner's DB password), then restore → repoint app → tunnel cutover. See **DEPLOYMENT & INFRASTRUCTURE**. | 🟡 In progress |
 
 When asked to "continue", default to Phase 13 remaining items (supplier management, expiration tracking, advanced analytics) unless the user specifies otherwise.
 
@@ -440,6 +441,47 @@ subscription, and a platform `superadmin` oversees every store. Migrations 0033�
 ## Credentials (CHANGE after first login)
 - Superadmin: phone `010552223` / password `12345678` (seeded in 0036).
 - Default-store admin: phone `017552223` / password `12345678` (seeded in 0030).
+
+---
+
+# DEPLOYMENT & INFRASTRUCTURE
+
+## Production serving (Mac mini)
+
+- launchd service `com.minimaldigital.smartsell` runs `next start` on 127.0.0.1:3000 from
+  `~/Smart_sell`; logs in `~/Smart_sell/logs/`. Deploy with `./deploy.sh` (git pull → npm
+  install → build → restart → health check).
+- Published via Cloudflare Tunnel (`~/.cloudflared/config.yml`, service
+  `com.minimaldigital.cloudflared`): `smartsell.minimaldigital.dev` → localhost:3000. The
+  subdomain resolves to the default store because it is set as that store's
+  `custom_domain` in the DB (not via `NEXT_PUBLIC_PLATFORM_DOMAIN`, which is the apex
+  `minimaldigital.dev`).
+- Port 8000 on this machine belongs to an unrelated Laravel app (`ams.minimaldigital.dev`)
+  — do not reuse it.
+- **Build quirk:** this network's IPv6 route to Google is broken, which hangs `next/font`'s
+  Google Fonts download. Always build with `NODE_OPTIONS="--dns-result-order=ipv4first"`
+  (already baked into `deploy.sh`).
+- `.env.local` (untracked) needs: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
+  `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_APP_URL=https://smartsell.minimaldigital.dev`,
+  `NEXT_PUBLIC_PLATFORM_DOMAIN=minimaldigital.dev`; optional `TELEGRAM_*` / `BAKONG_*`.
+
+## Phase 15 — self-hosted Supabase (in progress, 2026-07-08)
+Goal: replace Supabase cloud with a self-hosted Supabase stack on the same Mac mini.
+The app is unchanged — only `.env.local` values swap.
+
+- Runtime: Colima VM (4 CPU / 6 GB) + Docker CLI; stack at `~/supabase-selfhost/docker`
+  (official supabase/supabase docker compose, `supabase/postgres` 17), fresh secrets in
+  its own `.env` (dashboard user `supabase`).
+- Kong gateway on host port **8100** (8000 taken, see above); will be published as
+  `https://supabase.minimaldigital.dev` via the existing Cloudflare tunnel.
+- Auth config: `ENABLE_EMAIL_AUTOCONFIRM=true` (phone auth uses synthetic
+  `@phone.csms.app` emails, no SMTP), `SITE_URL=https://smartsell.minimaldigital.dev`.
+- Storage objects already mirrored from cloud to `~/supabase-selfhost/storage-mirror`
+  (buckets: product-images, payment-proofs, movement-proofs, branding).
+- Remaining steps: `pg_dump` the cloud DB via session pooler (**blocked: needs the DB
+  password from the owner**) → restore into local stack → upload storage mirror →
+  point `.env.local` at the new URL/keys → add tunnel ingress + DNS for
+  `supabase.minimaldigital.dev` → rebuild, restart, verify → decommission cloud project.
 
 ---
 

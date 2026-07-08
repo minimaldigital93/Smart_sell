@@ -31,7 +31,9 @@ echo "==> npm install (skips work if deps unchanged)"
 npm install
 
 echo "==> npm run build"
-npm run build
+# ipv4first: this network's IPv6 route to Google is broken, which makes
+# next/font's Google Fonts download hang and fail the build.
+NODE_OPTIONS="--dns-result-order=ipv4first" npm run build
 
 echo "==> restarting $SERVICE"
 launchctl kickstart -k "gui/$(id -u)/$SERVICE"
