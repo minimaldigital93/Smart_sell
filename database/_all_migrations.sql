@@ -2555,7 +2555,13 @@ create index if not exists products_new_arrival_idx
 -- which runs as its own statement/transaction.
 
 -- 1) Role -------------------------------------------------------------------
+-- Explicit commit: Postgres forbids using a freshly added enum value in the
+-- same transaction that added it. Without this, running the whole migration
+-- bundle as one script (e.g. pasted into a SQL editor, which wraps it in an
+-- implicit transaction) fails as soon as a later migration references
+-- 'superadmin' as a literal, even though that migration is a separate file.
 alter type public.user_role add value if not exists 'superadmin';
+commit;
 
 -- 2) Stores (tenant root) ---------------------------------------------------
 create table if not exists public.stores (
