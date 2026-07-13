@@ -211,6 +211,8 @@ database/
                          #   0039 platform finance: platform_expenses + superadmin P&L rollups
                          #   0040 tenant-aware SECURITY DEFINER helpers (handle_new_user,
                          #        create_customer_order, apply_inventory_movement)
+                         #   0041 per-store shop_categories (replaces product_category enum)
+                         #   0042 checkout honors per-store store_settings.shipping_fee (audit C1)
   policies/, seed/, tests/, _all_migrations.sql
 ```
 

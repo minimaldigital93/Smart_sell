@@ -5,11 +5,6 @@
 -- Do not edit by hand; regenerate from the migration files.
 -- ============================================================
 
-
--- ============================================
--- database/migrations/0001_extensions_and_enums.sql
--- ============================================
-
 -- 0001_extensions_and_enums.sql
 -- Postgres extensions + custom enum types used across the schema.
 
@@ -50,12 +45,6 @@ do $$ begin
     'order', 'inventory', 'promo', 'system'
   );
 exception when duplicate_object then null; end $$;
-
-
--- ============================================
--- database/migrations/0002_profiles.sql
--- ============================================
-
 -- 0002_profiles.sql
 -- public.profiles mirrors auth.users (one row per signed-in user) and stores
 -- role + display info. New auth.users rows auto-create a profile via trigger.
@@ -104,12 +93,6 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
-
-
--- ============================================
--- database/migrations/0003_products_and_inventory.sql
--- ============================================
-
 -- 0003_products_and_inventory.sql
 -- products: catalog rows. product_inventory: per-product stock tracking
 -- (1:1 with products; current_stock is the canonical value, products.stock is
@@ -184,12 +167,6 @@ drop trigger if exists on_product_created on public.products;
 create trigger on_product_created
   after insert on public.products
   for each row execute function public.handle_new_product();
-
-
--- ============================================
--- database/migrations/0004_orders.sql
--- ============================================
-
 -- 0004_orders.sql
 -- orders + order_items. user_id is nullable to support guest checkout.
 
@@ -235,12 +212,6 @@ create table if not exists public.order_items (
 
 create index if not exists order_items_order_id_idx on public.order_items(order_id);
 create index if not exists order_items_product_id_idx on public.order_items(product_id);
-
-
--- ============================================
--- database/migrations/0005_inventory_movements.sql
--- ============================================
-
 -- 0005_inventory_movements.sql
 -- Append-only ledger of every stock change. Written by apply_inventory_movement()
 -- in 0007 — do not insert directly except through that function.
@@ -264,12 +235,6 @@ create index if not exists inventory_movements_created_at_idx
   on public.inventory_movements(created_at desc);
 create index if not exists inventory_movements_order_id_idx
   on public.inventory_movements(order_id) where order_id is not null;
-
-
--- ============================================
--- database/migrations/0006_notifications.sql
--- ============================================
-
 -- 0006_notifications.sql
 -- Notifications: per-user or broadcast (user_id null). Read tracking is per-user.
 
@@ -290,12 +255,6 @@ create index if not exists notifications_broadcast_idx
   on public.notifications(created_at desc) where user_id is null;
 create index if not exists notifications_unread_idx
   on public.notifications(user_id) where read_at is null;
-
-
--- ============================================
--- database/migrations/0007_functions_and_triggers.sql
--- ============================================
-
 -- 0007_functions_and_triggers.sql
 -- Core domain functions:
 --   * apply_inventory_movement(...)         -- atomic, idempotent stock change
@@ -486,12 +445,6 @@ drop trigger if exists product_inventory_sync_cache on public.product_inventory;
 create trigger product_inventory_sync_cache
   after insert or update of current_stock on public.product_inventory
   for each row execute function public.sync_product_stock_cache();
-
-
--- ============================================
--- database/migrations/0008_rls_policies.sql
--- ============================================
-
 -- 0008_rls_policies.sql
 -- Row-Level Security policies for every public table.
 --
@@ -687,12 +640,6 @@ create policy notifications_modify_staff on public.notifications
   for all
   using (public.is_staff())
   with check (public.is_staff());
-
-
--- ============================================
--- database/migrations/0009_realtime_publications.sql
--- ============================================
-
 -- 0009_realtime_publications.sql
 -- Add tables to Supabase Realtime so clients can subscribe to changes.
 -- These are the tables where live updates matter most: orders (admin
@@ -730,23 +677,11 @@ begin
     end if;
   end loop;
 end $$;
-
-
--- ============================================
--- database/migrations/0010_product_ingredients.sql
--- ============================================
-
 -- 0010_product_ingredients.sql
 -- Additive: ingredients field for cosmetic products (spec PDP requirement).
 
 alter table public.products
   add column if not exists ingredients text;
-
-
--- ============================================
--- database/migrations/0011_payment_proofs_storage.sql
--- ============================================
-
 -- 0011_payment_proofs_storage.sql
 -- Storage bucket for KHQR / bank-transfer payment screenshots.
 --
@@ -787,12 +722,6 @@ create policy "payment_proofs_modify_staff"
   on storage.objects for all
   using (bucket_id = 'payment-proofs' and public.is_staff())
   with check (bucket_id = 'payment-proofs' and public.is_staff());
-
-
--- ============================================
--- database/migrations/0012_admin_views.sql
--- ============================================
-
 -- 0012_admin_views.sql
 -- Read-side views powering the admin dashboard. All views are
 -- `security_invoker = true` so they inherit the caller's RLS — only staff or
@@ -893,12 +822,6 @@ where pi.current_stock <= pi.minimum_stock
 order by pi.current_stock asc, pi.minimum_stock - pi.current_stock desc;
 
 grant select on public.v_low_stock_products to authenticated;
-
-
--- ============================================
--- database/migrations/0013_product_images_storage.sql
--- ============================================
-
 -- 0013_product_images_storage.sql
 -- Storage bucket for product catalog images. Public read, staff write.
 
@@ -930,12 +853,6 @@ create policy "product_images_modify_staff"
   on storage.objects for all
   using (bucket_id = 'product-images' and public.is_staff())
   with check (bucket_id = 'product-images' and public.is_staff());
-
-
--- ============================================
--- database/migrations/0014_notifications_audience.sql
--- ============================================
-
 -- 0014_notifications_audience.sql
 -- Adds `audience` so we can distinguish broadcast-to-all vs staff-only.
 -- Existing rows default to 'all' (matches previous broadcast semantics).
@@ -963,12 +880,6 @@ create policy notifications_select_visible on public.notifications
     or (user_id is null and audience = 'staff' and public.is_staff())
     or public.is_staff()
   );
-
-
--- ============================================
--- database/migrations/0015_notifications_triggers.sql
--- ============================================
-
 -- 0015_notifications_triggers.sql
 -- Auto-create notifications on key events:
 --   * orders INSERT          → staff-broadcast "New order"
@@ -1075,12 +986,6 @@ drop trigger if exists notify_low_stock_trg on public.product_inventory;
 create trigger notify_low_stock_trg
   after update of current_stock, minimum_stock on public.product_inventory
   for each row execute function public.notify_low_stock();
-
-
--- ============================================
--- database/migrations/0016_coupons.sql
--- ============================================
-
 -- 0016_coupons.sql
 -- Coupons / discount codes.
 --
@@ -1191,12 +1096,6 @@ create policy coupons_modify_staff on public.coupons
   for all
   using (public.is_staff())
   with check (public.is_staff());
-
-
--- ============================================
--- database/migrations/0017_movement_barcode_proofs.sql
--- ============================================
-
 -- 0017_movement_barcode_proofs.sql
 -- Audit-trail photo for each scan-driven inventory movement.
 -- Adds inventory_movements.barcode_image_url, extends apply_inventory_movement
@@ -1291,12 +1190,6 @@ end $$;
 
 revoke all on function public.apply_inventory_movement(uuid, public.movement_type, integer, text, uuid, uuid, text) from public;
 grant execute on function public.apply_inventory_movement(uuid, public.movement_type, integer, text, uuid, uuid, text) to authenticated;
-
-
--- ============================================
--- database/migrations/0018_movement_proofs_storage.sql
--- ============================================
-
 -- 0018_movement_proofs_storage.sql
 -- Storage bucket for scan-flow barcode-proof photos. Staff-only — these are
 -- internal audit records, not customer-facing assets.
@@ -1329,12 +1222,6 @@ create policy "movement_proofs_modify_staff"
   on storage.objects for all
   using (bucket_id = 'movement-proofs' and public.is_staff())
   with check (bucket_id = 'movement-proofs' and public.is_staff());
-
-
--- ============================================
--- database/migrations/0019_payment_method_cash.sql
--- ============================================
-
 -- 0019_payment_method_cash.sql
 -- Add 'cash' to the payment_method enum so staff can record in-store
 -- counter sales (POS) where money is taken at the till.
@@ -1342,12 +1229,6 @@ create policy "movement_proofs_modify_staff"
 do $$ begin
   alter type public.payment_method add value if not exists 'cash';
 exception when duplicate_object then null; end $$;
-
-
--- ============================================
--- database/migrations/0020_loyalty_points.sql
--- ============================================
-
 -- 0020_loyalty_points.sql
 -- Loyalty points system.
 --
@@ -1504,12 +1385,6 @@ create policy loyalty_txn_modify_staff on public.loyalty_transactions
   for all
   using (public.is_staff())
   with check (public.is_staff());
-
-
--- ============================================
--- database/migrations/0021_drop_old_apply_inventory_movement.sql
--- ============================================
-
 -- 0021_drop_old_apply_inventory_movement.sql
 -- Migration 0017 added a 7-arg overload of apply_inventory_movement (with
 -- p_barcode_image_url). Because `create or replace function` only replaces a
@@ -1533,12 +1408,6 @@ drop function if exists public.apply_inventory_movement(
   uuid,
   uuid
 );
-
-
--- ============================================
--- database/migrations/0022_allow_adjustment_to_zero.sql
--- ============================================
-
 -- 0022_allow_adjustment_to_zero.sql
 -- The function body in 0017 rejected p_quantity <= 0, which made it impossible
 -- to use 'adjustment' to set a product's on-hand count to 0 (a legitimate
@@ -1636,12 +1505,6 @@ begin
 
   return v_new_stock;
 end $$;
-
-
--- ============================================
--- database/migrations/0023_align_sales_view_and_restock_on_cancel.sql
--- ============================================
-
 -- 0023_align_sales_view_and_restock_on_cancel.sql
 --
 -- Two related fixes for the order lifecycle:
@@ -1765,12 +1628,6 @@ end $$;
 
 -- Trigger definition from 0007 already binds to this function; no need to
 -- re-create the trigger itself.
-
-
--- ============================================
--- database/migrations/0024_order_integrity_and_credit_refunds.sql
--- ============================================
-
 -- 0024_order_integrity_and_credit_refunds.sql
 --
 -- Closes a cluster of order-integrity gaps surfaced by the business-flow audit:
@@ -2148,12 +2005,6 @@ begin
 
   return new;
 end $$;
-
-
--- ============================================
--- database/migrations/0025_private_media_buckets.sql
--- ============================================
-
 -- 0025_private_media_buckets.sql
 --
 -- Audit findings #7 + #9: sensitive media was world-readable.
@@ -2205,12 +2056,6 @@ drop policy if exists "movement_proofs_select_staff" on storage.objects;
 create policy "movement_proofs_select_staff"
   on storage.objects for select
   using (bucket_id = 'movement-proofs' and public.is_staff());
-
-
--- ============================================
--- database/migrations/0026_rate_limits.sql
--- ============================================
-
 -- 0026_rate_limits.sql
 --
 -- Audit finding #14: the app's rate limiter was an in-process Map, so on a
@@ -2285,12 +2130,6 @@ grant execute on function public.check_rate_limit(text, integer, integer)
 -- upsert) but accumulate with distinct IPs over time. If you run pg_cron:
 --   select cron.schedule('rate-limits-sweep', '0 * * * *',
 --     $$delete from public.rate_limits where reset_at < now() - interval '1 day'$$);
-
-
--- ============================================
--- database/migrations/0027_lock_payment_proofs_upload.sql
--- ============================================
-
 -- 0027_lock_payment_proofs_upload.sql
 --
 -- Audit finding #8: anyone (anon) could upload to the payment-proofs bucket via
@@ -2311,12 +2150,6 @@ drop policy if exists "payment_proofs_insert_anyone" on storage.objects;
 -- No INSERT policy for anon/authenticated remains on payment-proofs. The
 -- service-role client bypasses RLS, so server-side uploads still work; staff
 -- moderation (delete/replace) continues via payment_proofs_modify_staff.
-
-
--- ============================================
--- database/migrations/0028_store_settings.sql
--- ============================================
-
 -- 0028_store_settings.sql
 -- Single-row store settings: branding (name, tagline, logo), theme preset,
 -- default language, currency, shipping fee, contact info. Publicly readable so
@@ -2393,12 +2226,6 @@ create policy "branding_modify_admin"
   on storage.objects for all
   using (bucket_id = 'branding' and public.is_admin())
   with check (bucket_id = 'branding' and public.is_admin());
-
-
--- ============================================
--- database/migrations/0029_phone_auth_profile.sql
--- ============================================
-
 -- 0029_phone_auth_profile.sql
 -- Phone-based auth: users sign up/in with a phone number + password. The phone
 -- is mapped to a synthetic email (`<digits>@phone.csms.app`) for Supabase auth.
@@ -2422,12 +2249,6 @@ begin
   on conflict (id) do nothing;
   return new;
 end $$;
-
-
--- ============================================
--- database/migrations/0030_reset_users_seed_admin.sql
--- ============================================
-
 -- 0030_reset_users_seed_admin.sql
 -- Reset accounts for phone-based auth.
 --
@@ -2493,12 +2314,6 @@ begin
         phone = '17552223',
         email = null;
 end $$;
-
-
--- ============================================
--- database/migrations/0031_checkout_uses_store_shipping_fee.sql
--- ============================================
-
 -- 0031_checkout_uses_store_shipping_fee.sql
 --
 -- Make customer checkout honour the shipping fee configured in Settings.
@@ -2706,12 +2521,6 @@ revoke all on function public.create_customer_order(
 grant execute on function public.create_customer_order(
   uuid, text, text, text, text, public.payment_method, text, jsonb, text, integer
 ) to authenticated, anon;
-
-
--- ============================================
--- database/migrations/0032_product_marketing_flags.sql
--- ============================================
-
 -- 0032_product_marketing_flags.sql
 --
 -- Give admins explicit, per-product control over the storefront merchandising
@@ -2733,12 +2542,6 @@ create index if not exists products_on_sale_idx
 
 create index if not exists products_new_arrival_idx
   on public.products(new_arrival) where new_arrival and is_active;
-
-
--- ============================================
--- database/migrations/0033_superadmin_and_stores.sql
--- ============================================
-
 -- 0033_superadmin_and_stores.sql
 -- Tenancy foundation: introduce the platform `superadmin` role and the `stores`
 -- table (tenant root). Every shop owner ("admin") owns exactly one store; staff
@@ -2898,12 +2701,6 @@ create policy stores_superadmin_all on public.stores
 drop policy if exists stores_owner_read on public.stores;
 create policy stores_owner_read on public.stores
   for select using (id = public.current_store_id());
-
-
--- ============================================
--- database/migrations/0034_store_scoping.sql
--- ============================================
-
 -- 0034_store_scoping.sql
 -- Add store_id to every tenant-owned table, backfill existing rows to the
 -- "default" store created in 0033, then enforce NOT NULL. Global unique
@@ -3011,12 +2808,6 @@ create index if not exists coupons_store_idx on public.coupons(store_id);
 create index if not exists loyalty_transactions_store_idx on public.loyalty_transactions(store_id);
 create index if not exists notifications_store_idx
   on public.notifications(store_id, created_at desc);
-
-
--- ============================================
--- database/migrations/0035_store_settings_per_store.sql
--- ============================================
-
 -- 0035_store_settings_per_store.sql
 -- Turn the singleton store_settings (id = 1) into one row per store.
 --
@@ -3064,12 +2855,6 @@ drop trigger if exists on_store_created on public.stores;
 create trigger on_store_created
   after insert on public.stores
   for each row execute function public.handle_new_store();
-
-
--- ============================================
--- database/migrations/0036_seed_superadmin.sql
--- ============================================
-
 -- 0036_seed_superadmin.sql
 -- Seed the platform owner (superadmin). Runs as its own migration so the
 -- 'superadmin' enum value added in 0033 is already committed and safe to use.
@@ -3127,12 +2912,6 @@ begin
         phone    = '10552223',
         store_id = null;
 end $$;
-
-
--- ============================================
--- database/migrations/0037_billing.sql
--- ============================================
-
 -- 0037_billing.sql
 -- Subscription billing for stores: plans ($9/$19/$29), one subscription per
 -- store, and a payment ledger (KHQR via Bakong, or a manual screenshot proof).
@@ -3335,12 +3114,6 @@ create policy payments_insert_own on public.subscription_payments
 drop policy if exists payments_write_superadmin on public.subscription_payments;
 create policy payments_write_superadmin on public.subscription_payments
   for all using (public.is_superadmin()) with check (public.is_superadmin());
-
-
--- ============================================
--- database/migrations/0038_rls_multitenant.sql
--- ============================================
-
 -- 0038_rls_multitenant.sql
 -- Rewrite RLS on every tenant-owned table so a store's staff/admin see and
 -- modify ONLY their own store's rows, while the platform superadmin bypasses
@@ -3593,12 +3366,6 @@ create policy stores_owner_update on public.stores
   for update
   using (public.is_superadmin() or (public.is_admin() and id = public.current_store_id()))
   with check (public.is_superadmin() or (public.is_admin() and id = public.current_store_id()));
-
-
--- ============================================
--- database/migrations/0039_platform_finance.sql
--- ============================================
-
 -- 0039_platform_finance.sql
 -- Platform-owner finances: subscription revenue (from paid subscription_payments)
 -- minus the platform's own expenses (hosting/server/other), rolled up by month
@@ -3725,12 +3492,6 @@ $$;
 grant execute on function public.platform_pnl_monthly(integer) to authenticated;
 grant execute on function public.platform_pnl_yearly() to authenticated;
 grant execute on function public.platform_summary() to authenticated;
-
-
--- ============================================
--- database/migrations/0040_functions_tenant_aware.sql
--- ============================================
-
 -- 0040_functions_tenant_aware.sql
 -- Make the SECURITY DEFINER helpers store-aware so multi-tenant data stays
 -- isolated even though these functions bypass RLS:
@@ -4046,12 +3807,6 @@ begin
 
   return v_new_stock;
 end $$;
-
-
--- ============================================
--- database/migrations/0041_shop_categories.sql
--- ============================================
-
 -- 0041_shop_categories.sql
 -- Manual, per-store product categories (Settings → Shop Categories).
 --
@@ -4192,3 +3947,223 @@ create policy shop_categories_modify_admin on public.shop_categories
     public.is_superadmin()
     or (public.is_admin() and store_id = public.current_store_id())
   );
+-- 0042_checkout_honor_store_shipping_fee.sql
+--
+-- BUGFIX (audit C1): customer checkout was charging a hardcoded $2 shipping fee
+-- regardless of the fee configured in Settings.
+--
+-- 0031 fixed create_customer_order to read the fee from store_settings, but the
+-- 0040 rewrite (which added p_store_id for multi-tenancy) reintroduced the
+-- hardcoded `c_shipping_fee constant := 2`. Because 0040 is the latest
+-- definition, every real online order has since been charged $2 flat while the
+-- storefront cart displays the store's configured fee (getStoreSettings ->
+-- store_settings.shipping_fee), so the total the customer sees never matched the
+-- total written to the order.
+--
+-- This recreates the function byte-for-byte from 0040 except that the shipping
+-- fee is read from the resolved store's store_settings row (per-store since
+-- 0035), defaulting to 2 when the row/value is missing. The function is SECURITY
+-- DEFINER, so it can read store_settings regardless of the caller's RLS.
+
+create or replace function public.create_customer_order(
+  p_order_id       uuid,
+  p_customer_name  text,
+  p_phone          text,
+  p_address        text,
+  p_note           text,
+  p_payment_method public.payment_method,
+  p_payment_image  text,
+  p_items          jsonb,
+  p_coupon_code    text default null,
+  p_points         integer default 0,
+  p_store_id       uuid default null
+) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  v_shipping_fee  numeric(10,2);              -- read from store_settings below
+  v_store         uuid := coalesce(p_store_id, public.default_store_id());
+  v_user          uuid := auth.uid();
+  v_item          jsonb;
+  v_pid           uuid;
+  v_qty           integer;
+  v_prod          record;
+  v_unit          numeric(10,2);
+  v_subtotal      numeric(10,2) := 0;
+  v_coupon        record;
+  v_coupon_disc   numeric(10,2) := 0;
+  v_coupon_id     uuid := null;
+  v_coupon_code   text := null;
+  v_avail         integer;
+  v_capped_pts    integer := 0;
+  v_pts_disc      numeric(10,2) := 0;
+  v_pts_redeem    integer := 0;
+  v_max_by_ratio  numeric(10,2);
+  v_remaining     numeric(10,2);
+  v_discount      numeric(10,2);
+  v_total         numeric(10,2);
+  v_bal           integer;
+begin
+  if p_items is null or jsonb_array_length(p_items) = 0 then
+    raise exception 'cart is empty' using errcode = '22023';
+  end if;
+
+  -- Shipping fee is store-configurable (Settings -> shipping_fee); default to 2
+  -- when the store has no settings row/value. Keeps the charged total in sync
+  -- with the fee shown in the storefront cart.
+  select shipping_fee into v_shipping_fee
+    from public.store_settings where store_id = v_store;
+  v_shipping_fee := coalesce(v_shipping_fee, 2);
+
+  -- 1. Validate every line (scoped to this store), lock inventory, recompute.
+  for v_item in select * from jsonb_array_elements(p_items)
+  loop
+    v_pid := (v_item->>'product_id')::uuid;
+    v_qty := (v_item->>'quantity')::integer;
+    if v_qty is null or v_qty <= 0 then
+      raise exception 'invalid quantity' using errcode = '22023';
+    end if;
+
+    select p.name, p.price, p.discount_price, p.is_active, i.current_stock
+      into v_prod
+      from public.products p
+      join public.product_inventory i on i.product_id = p.id
+     where p.id = v_pid
+       and p.store_id = v_store
+     for update of i;
+
+    if not found then
+      raise exception 'a product in your cart is unavailable'
+        using errcode = 'P0002';
+    end if;
+    if not v_prod.is_active then
+      raise exception '% is no longer available', v_prod.name
+        using errcode = '23514';
+    end if;
+
+    v_unit := case
+      when v_prod.discount_price is not null and v_prod.discount_price > 0
+           and v_prod.discount_price < v_prod.price
+        then v_prod.discount_price
+      else v_prod.price
+    end;
+    if v_unit is null or v_unit <= 0 then
+      raise exception '% has no price set', v_prod.name using errcode = '23514';
+    end if;
+    if v_prod.current_stock < v_qty then
+      raise exception 'INSUFFICIENT_STOCK:%', v_prod.name using errcode = '23514';
+    end if;
+
+    v_subtotal := v_subtotal + (v_unit * v_qty);
+  end loop;
+
+  v_subtotal := round(v_subtotal, 2);
+
+  -- 2. Coupon: scoped to this store.
+  if p_coupon_code is not null and length(trim(p_coupon_code)) > 0 then
+    select * into v_coupon
+      from public.coupons
+     where code = upper(trim(p_coupon_code))
+       and store_id = v_store
+       and is_active
+       and (starts_at is null or starts_at <= now())
+       and (expires_at is null or expires_at > now())
+     for update;
+
+    if not found then
+      raise exception 'COUPON_INVALID' using errcode = '23514';
+    end if;
+    if v_coupon.max_redemptions is not null
+       and v_coupon.redeemed_count >= v_coupon.max_redemptions then
+      raise exception 'COUPON_LIMIT' using errcode = '23514';
+    end if;
+    if v_subtotal < v_coupon.min_subtotal then
+      raise exception 'COUPON_MIN:%', v_coupon.min_subtotal using errcode = '23514';
+    end if;
+
+    v_coupon_disc := least(
+      case when v_coupon.discount_type = 'percent'
+           then round(v_subtotal * v_coupon.discount_value / 100, 2)
+           else v_coupon.discount_value end,
+      v_subtotal);
+    v_coupon_id   := v_coupon.id;
+    v_coupon_code := v_coupon.code;
+
+    update public.coupons
+       set redeemed_count = redeemed_count + 1, updated_at = now()
+     where id = v_coupon.id
+       and (max_redemptions is null or redeemed_count < max_redemptions);
+    if not found then
+      raise exception 'COUPON_LIMIT' using errcode = '23514';
+    end if;
+  end if;
+
+  -- 3. Loyalty points: cap to balance + ratio, deduct atomically.
+  if p_points > 0 and v_user is not null then
+    select loyalty_points into v_avail
+      from public.profiles where id = v_user for update;
+    v_avail := coalesce(v_avail, 0);
+    v_capped_pts := least(p_points, v_avail);
+    if v_capped_pts > 0 then
+      v_max_by_ratio := round(v_subtotal * 0.5, 2);
+      v_remaining    := greatest(0, round(v_subtotal + v_shipping_fee - v_coupon_disc, 2));
+      v_pts_disc     := least(round(v_capped_pts::numeric / 100, 2),
+                              v_max_by_ratio, v_remaining);
+      v_pts_redeem   := ceil(v_pts_disc * 100)::integer;
+    end if;
+
+    if v_pts_redeem > 0 then
+      update public.profiles
+         set loyalty_points = loyalty_points - v_pts_redeem
+       where id = v_user and loyalty_points >= v_pts_redeem
+      returning loyalty_points into v_bal;
+      if not found then
+        raise exception 'POINTS_CHANGED' using errcode = '23514';
+      end if;
+      insert into public.loyalty_transactions
+        (store_id, user_id, order_id, type, points, balance_after, note)
+      values
+        (v_store, v_user, p_order_id, 'redeem', -v_pts_redeem, v_bal, 'checkout redemption');
+    end if;
+  end if;
+
+  -- 4. Final money math.
+  v_discount := round(v_coupon_disc + v_pts_disc, 2);
+  if v_discount > round(v_subtotal + v_shipping_fee, 2) then
+    v_discount := round(v_subtotal + v_shipping_fee, 2);
+  end if;
+  v_total := round(v_subtotal + v_shipping_fee - v_discount, 2);
+
+  -- 5. Persist order + items, stamped with the store.
+  insert into public.orders (
+    id, store_id, user_id, customer_name, phone, address, note,
+    subtotal, shipping_fee, discount, total,
+    payment_method, payment_image, coupon_id, coupon_code, points_redeemed
+  ) values (
+    p_order_id, v_store, v_user, p_customer_name, p_phone, p_address,
+    nullif(trim(coalesce(p_note, '')), ''),
+    v_subtotal, v_shipping_fee, v_discount, v_total,
+    p_payment_method, p_payment_image, v_coupon_id, v_coupon_code, v_pts_redeem
+  );
+
+  for v_item in select * from jsonb_array_elements(p_items)
+  loop
+    insert into public.order_items (store_id, order_id, product_id, product_name, quantity, price)
+    values (
+      v_store,
+      p_order_id,
+      (v_item->>'product_id')::uuid,
+      'pending',                              -- overwritten by trigger
+      (v_item->>'quantity')::integer,
+      0                                       -- overwritten by trigger
+    );
+  end loop;
+
+  return jsonb_build_object('order_id', p_order_id, 'total', v_total);
+end $$;
+
+revoke all on function public.create_customer_order(
+  uuid, text, text, text, text, public.payment_method, text, jsonb, text, integer, uuid
+) from public;
+grant execute on function public.create_customer_order(
+  uuid, text, text, text, text, public.payment_method, text, jsonb, text, integer, uuid
+) to authenticated, anon;
