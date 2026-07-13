@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono, Noto_Serif_Khmer } from "next/font/google";
+import localFont from "next/font/local";
+import { GeistSans as geistSans } from "geist/font/sans";
+import { GeistMono as geistMono } from "geist/font/mono";
 import { Providers } from "@/components/shared/providers";
 import { SwipeNavigation } from "@/components/shared/swipe-navigation";
 import { APP_TAGLINE } from "@/lib/constants";
@@ -8,21 +10,21 @@ import { getStoreSettings } from "@/services/settings";
 import { themeStyleVars } from "@/lib/theme/presets";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
-const notoKhmer = Noto_Serif_Khmer({
+// Self-hosted (not next/font/google): this network's route to Google Fonts is
+// unreliable at build time, and Next 16's Turbopack build doesn't respect the
+// NODE_OPTIONS=--dns-result-order=ipv4first workaround (it does its own
+// fetching outside Node's DNS resolver), so a flaky/blocked connection to
+// fonts.googleapis.com now hard-fails the production build instead of just
+// being slow. `geist` ships Geist/Geist Mono as local font files; Noto Serif
+// Khmer is vendored under ./fonts (khmer-subset woff2, weights 400/500/600).
+const notoKhmer = localFont({
   variable: "--font-khmer",
-  subsets: ["khmer"],
-  weight: ["400", "500", "600"],
   display: "swap",
+  src: [
+    { path: "./fonts/noto-serif-khmer/NotoSerifKhmer-400.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/noto-serif-khmer/NotoSerifKhmer-500.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/noto-serif-khmer/NotoSerifKhmer-600.woff2", weight: "600", style: "normal" },
+  ],
 });
 
 export async function generateMetadata(): Promise<Metadata> {
