@@ -1,4 +1,4 @@
-# Cosmetic Store Management System (CSMS_App)
+# Cosmetic Store Management System (Smart Sell)
 
 iPhone-first SaaS for Cambodian cosmetic shops: storefront + admin + barcode inventory + KHQR checkout.
 

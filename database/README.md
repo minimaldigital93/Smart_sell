@@ -1,7 +1,7 @@
 # Database — Phase 2
 
 Postgres schema, RLS policies, transaction-safe inventory logic, and realtime
-publications for CSMS_App.
+publications for Smart Sell.
 
 ## Files
 

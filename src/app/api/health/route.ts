@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 export function GET() {
   return NextResponse.json({
     ok: true,
-    name: "csms-app",
+    name: "smart_sell",
     time: new Date().toISOString(),
   });
 }
