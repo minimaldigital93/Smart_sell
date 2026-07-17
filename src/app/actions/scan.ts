@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { requireStaff } from "@/lib/auth/session";
+import { getMyStoreId } from "@/services/stores";
 import type { Product, ProductInventory } from "@/types";
 
 export type ScanLookupResult =
@@ -31,13 +32,18 @@ export async function lookupProductByBarcodeAction(
   if (!normalized) return { ok: false, error: "Empty barcode" };
 
   const supabase = await createClient();
-  const { data: product, error } = await supabase
+  // Barcodes are only unique per store — two shops selling the same branded
+  // item share an EAN, so an unscoped lookup errors on >1 match and can even
+  // return another store's product (audit H3).
+  const storeId = await getMyStoreId();
+  let qb = supabase
     .from("products")
     .select(
       "id, name, slug, images, price, discount_price, barcode, sku, is_active",
     )
-    .eq("barcode", normalized)
-    .maybeSingle();
+    .eq("barcode", normalized);
+  if (storeId) qb = qb.eq("store_id", storeId);
+  const { data: product, error } = await qb.maybeSingle();
 
   if (error) {
     console.error("[scan.lookup]", error);

@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth/session";
+import { requirePlanCapability } from "@/lib/billing/capabilities";
 
 export type DomainState = { ok: boolean; error?: string; message?: string };
 
@@ -27,6 +28,8 @@ export async function setCustomDomain(
 ): Promise<DomainState> {
   const { profile } = await requireAdmin();
   if (!profile.store_id) return { ok: false, error: "No store on this account." };
+  const gate = await requirePlanCapability("custom_domain");
+  if (!gate.ok) return { ok: false, error: gate.error };
 
   const parsed = domainSchema.safeParse(formData.get("domain") ?? "");
   if (!parsed.success) {

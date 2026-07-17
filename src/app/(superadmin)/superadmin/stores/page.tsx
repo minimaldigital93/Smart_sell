@@ -81,9 +81,7 @@ export default async function StoresPage() {
                     <td className="text-muted-foreground px-4 py-2 text-xs">
                       {s.current_period_end
                         ? new Date(s.current_period_end).toLocaleDateString()
-                        : s.trial_ends_at
-                          ? `Trial ${new Date(s.trial_ends_at).toLocaleDateString()}`
-                          : "—"}
+                        : "—"}
                     </td>
                   </tr>
                 );

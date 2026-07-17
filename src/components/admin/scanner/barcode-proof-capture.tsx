@@ -21,6 +21,8 @@ type Props = {
   value: string | null;
   onChange: (url: string | null) => void;
   productId: string;
+  /** Owning store — storage policies require store-prefixed paths (0045). */
+  storeId: string | null;
   disabled?: boolean;
 };
 
@@ -28,6 +30,7 @@ export function BarcodeProofCapture({
   value,
   onChange,
   productId,
+  storeId,
   disabled,
 }: Props) {
   const cameraRef = useRef<HTMLInputElement | null>(null);
@@ -51,7 +54,8 @@ export function BarcodeProofCapture({
       const ext = (file.name.split(".").pop() ?? "jpg")
         .toLowerCase()
         .slice(0, 4);
-      const path = `${productId}/${crypto.randomUUID()}.${ext}`;
+      const prefix = storeId ? `stores/${storeId}/` : "";
+      const path = `${prefix}${productId}/${crypto.randomUUID()}.${ext}`;
       const { error } = await supabase.storage
         .from("movement-proofs")
         .upload(path, file, { cacheControl: "3600", upsert: false });

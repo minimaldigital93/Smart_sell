@@ -13,6 +13,37 @@ migration number or `CLAUDE.md` phase where useful.
 
 ---
 
+## 2026-07-17 — Phase 16: production refactor + khqr.cc payments (migrations 0043–0048)
+
+Uncommitted at time of writing. The full production-readiness refactor driven by
+`docs/07_PRODUCTION_READINESS_AUDIT.md` plus the payment-platform replacement:
+
+- **Security (0043–0045)**: C1 SECURITY DEFINER grants revoked/guarded
+  (`activate_subscription` superadmin/service-only + idempotent, staff-only
+  `apply_inventory_movement`, trigger-only helpers, dead RPCs dropped); C2 profiles
+  `role`/`store_id` pinned by trigger; C3 admin services/views/storage tenant-scoped
+  (`getMyStoreId()` filters, store-prefixed storage paths, ICT sales buckets);
+  C5 inbound `x-store-*` headers stripped in middleware; H3/H4/H8/H10 fixed.
+- **Plan gating (H1)**: `lib/billing/capabilities.ts` enforces max_products / pos /
+  coupons / custom_domain; gated nav hidden.
+- **Loyalty removed (0046)**: exploit-prone global wallet deleted end-to-end;
+  `create_customer_order` rewritten as the single CANONICAL v3 definition.
+- **Trial path removed (0043)**: pay-first only; `platform_summary` reports
+  total_stores instead of trial_stores.
+- **khqr.cc payments (0047/0048)**: AMS_APP's KHQRPay architecture ported —
+  `store_payment_settings`, `order_payments` ledger + state machine,
+  `payment_webhooks`, signature-authed webhook, status poll, reconcile cron,
+  hosted checkout + demo mode; checkout/POS methods reduced to KHQR + cash;
+  screenshot upload and `lib/bakong` (official Bakong API) removed; subscriptions
+  settle through the same gateway with the platform profile.
+- **Testing/quality**: Vitest bootstrapped (38 unit tests: money math, transitions,
+  redirects, plan limits, CRC16/TLV, signing, webhook validation, state machine);
+  `types/database.ts` gained Views + payment tables; `as never` view casts removed;
+  fixed a 1-cent preview/charge divergence in `computeDiscount` rounding.
+
+**Deploy note: migrations 0043–0048 and this app build MUST ship together**
+(`create_customer_order` signature changed; loyalty RPCs dropped).
+
 ## 2026-07-13 — Project rename
 
 `f870ba9` Renamed project from its working name to `smart_sell` to match the GitHub

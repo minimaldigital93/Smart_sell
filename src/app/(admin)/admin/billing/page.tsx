@@ -9,7 +9,6 @@ import { BillingClient } from "@/components/billing/billing-client";
 export const dynamic = "force-dynamic";
 
 const STATUS_BLURB: Record<string, string> = {
-  trial: "You're on a free trial. Subscribe to keep your store live after it ends.",
   active: "Your subscription is active.",
   grace: "Your subscription has lapsed. Renew now to avoid your store being hidden.",
   locked: "Your store is paused. Renew to bring it back online.",
@@ -37,9 +36,7 @@ export default async function BillingPage() {
       : STATUS_BLURB[status];
   const renews = store?.current_period_end
     ? new Date(store.current_period_end).toLocaleDateString()
-    : store?.trial_ends_at
-      ? new Date(store.trial_ends_at).toLocaleDateString()
-      : null;
+    : null;
 
   const billingPlans = plans.map((p) => ({
     id: p.id,
@@ -81,7 +78,7 @@ export default async function BillingPage() {
           {renews ? (
             <div className="text-right">
               <p className="text-muted-foreground text-xs uppercase tracking-wider">
-                {status === "trial" ? "Trial ends" : "Renews"}
+                Renews
               </p>
               <p className="text-sm font-medium">{renews}</p>
             </div>

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { PAYMENT_METHODS } from "@/lib/constants";
+import { CHECKOUT_PAYMENT_METHODS } from "@/lib/constants";
 import { passwordSchema, phoneSchema } from "@/lib/auth/schemas";
 
 export const checkoutCustomerSchema = z.object({
@@ -9,7 +9,7 @@ export const checkoutCustomerSchema = z.object({
   phone: phoneSchema,
   address: z.string().trim().min(5, "Address is required").max(500),
   note: z.string().trim().max(500).optional().or(z.literal("")),
-  payment_method: z.enum(PAYMENT_METHODS),
+  payment_method: z.enum(CHECKOUT_PAYMENT_METHODS),
 });
 
 export type CheckoutCustomerValues = z.infer<typeof checkoutCustomerSchema>;
@@ -40,7 +40,6 @@ export const submitOrderSchema = checkoutCustomerSchema.extend({
     .regex(/^[A-Za-z0-9_-]+$/, "Invalid coupon code")
     .optional()
     .or(z.literal("")),
-  points_to_redeem: z.coerce.number().int().min(0).max(100_000).optional(),
 });
 
 export type SubmitOrderValues = z.infer<typeof submitOrderSchema>;

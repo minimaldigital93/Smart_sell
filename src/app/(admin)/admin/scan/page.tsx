@@ -1,5 +1,6 @@
 import { ScanModePicker } from "@/components/admin/scanner/scan-mode-picker";
 import { ScanFlow } from "@/components/admin/scanner/scan-flow";
+import { getMyStoreId } from "@/services/stores";
 
 export const metadata = { title: "Scan barcode" };
 
@@ -21,7 +22,7 @@ export default async function ScanPage(props: { searchParams: SearchParams }) {
       </header>
 
       <ScanModePicker active={mode} />
-      <ScanFlow mode={mode} />
+      <ScanFlow mode={mode} storeId={await getMyStoreId()} />
 
       <section className="rounded-2xl border border-dashed border-border bg-muted/30 p-4 text-xs text-muted-foreground">
         <p className="font-medium text-foreground">Tips</p>

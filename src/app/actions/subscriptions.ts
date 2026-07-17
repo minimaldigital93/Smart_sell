@@ -7,32 +7,41 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { requireAdmin } from "@/lib/auth/session";
 import { getMyStore } from "@/services/stores";
 import { getPlanByCode } from "@/services/subscriptions";
+import {
+  mintSubscriptionKhqrPayment,
+  newSubscriptionTransactionId,
+  pollSubscriptionPayment,
+  subscriptionKhqrAvailable,
+} from "@/services/subscription-billing";
 import { checkRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
-import { generateSubscriptionKhqr, newBillNumber } from "@/lib/bakong/khqr";
-import { checkTransactionByMd5 } from "@/lib/bakong/verify";
+import { requestOrigin } from "@/lib/http/origin";
 import { isPlanCode } from "@/lib/billing/plans";
 
 export type CheckoutResult = {
   ok: boolean;
   error?: string;
   paymentId?: string;
-  qr?: string | null;
-  md5?: string | null;
   amount?: number;
-  /** true when a Bakong QR was generated (poll for status); false = manual. */
+  /** true = khqr.cc checkout (poll for status); false = manual proof. */
   automated?: boolean;
+  /** Signed khqr.cc hosted-checkout URL (live mode). */
+  checkoutUrl?: string | null;
+  /** Local KHQR payload to render as a QR (demo mode). */
+  qrPayload?: string | null;
 };
 
 export type PollResult = {
   ok: boolean;
-  status: "pending" | "paid" | "unavailable";
+  status: "pending" | "paid" | "expired" | "unavailable";
   periodEnd?: string | null;
   error?: string;
 };
 
 /**
- * Begin a subscription purchase: create a pending payment for the chosen plan
- * and, when Bakong is configured, a KHQR to scan. Owner-only.
+ * Begin a subscription purchase: create a khqr.cc payment for the chosen plan
+ * (hosted checkout, settled by webhook/poll) — or fall back to the manual
+ * screenshot-proof flow while the platform's khqr.cc profile is unconfigured.
+ * Owner-only.
  */
 export async function startSubscriptionCheckout(
   planCode: string,
@@ -53,46 +62,36 @@ export async function startSubscriptionCheckout(
   if (!plan) return { ok: false, error: "Plan not available." };
 
   const amount = Number(plan.price_usd);
-  const billNumber = newBillNumber(store.id);
-  const khqr = await generateSubscriptionKhqr({
-    amountUsd: amount,
-    billNumber,
-    storeLabel: store.name,
-  });
 
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("subscription_payments")
-    .insert({
-      store_id: store.id,
-      plan_id: plan.id,
-      amount_usd: amount,
-      method: khqr ? "khqr" : "manual",
-      bill_number: billNumber,
-      bakong_md5: khqr?.md5 ?? null,
-      status: "pending",
-    })
-    .select("id")
-    .single();
-
-  if (error || !data) {
-    console.error("[billing.checkout] insert", error);
-    return { ok: false, error: "Could not start checkout. Please retry." };
+  if (!subscriptionKhqrAvailable()) {
+    // Manual fallback: the client shows the proof-upload form; the row is
+    // created on submit (submitManualSubscriptionProof).
+    return { ok: true, amount, automated: false };
   }
+
+  const origin = await requestOrigin();
+  const minted = await mintSubscriptionKhqrPayment({
+    storeId: store.id,
+    planId: plan.id,
+    amountUsd: amount,
+    billingUrl: `${origin}/admin/billing`,
+  });
+  if (!minted.ok) return { ok: false, error: minted.error };
 
   return {
     ok: true,
-    paymentId: data.id,
-    qr: khqr?.qr ?? null,
-    md5: khqr?.md5 ?? null,
+    paymentId: minted.payment.id,
     amount,
-    automated: !!khqr,
+    automated: true,
+    checkoutUrl: minted.payment.checkout_url,
+    qrPayload: minted.payment.qr_payload,
   };
 }
 
 /**
- * Poll Bakong for a pending KHQR payment. On success, activates the
- * subscription (extends the store's paid period by 30 days). Owner-only.
+ * Poll a pending khqr subscription payment. On settlement the store's paid
+ * period extends via finalize_subscription_payment (service-role RPC).
+ * Owner-only.
  */
 export async function checkSubscriptionPayment(
   paymentId: string,
@@ -100,42 +99,24 @@ export async function checkSubscriptionPayment(
   await requireAdmin();
   const supabase = await createClient();
 
+  // RLS scopes this read to the caller's own store.
   const { data: payment } = await supabase
     .from("subscription_payments")
-    .select("id, status, bakong_md5")
+    .select("*")
     .eq("id", paymentId)
     .maybeSingle();
 
   if (!payment) return { ok: false, status: "pending", error: "Not found." };
   if (payment.status === "paid") return { ok: true, status: "paid" };
-  if (!payment.bakong_md5) return { ok: true, status: "pending" };
 
-  const result = await checkTransactionByMd5(payment.bakong_md5);
-  if (result.status === "unavailable") {
-    return { ok: true, status: "unavailable" };
+  const result = await pollSubscriptionPayment(payment);
+  if (result.paid) {
+    revalidatePath("/admin/billing");
+    revalidatePath("/admin", "layout");
+    return { ok: true, status: "paid", periodEnd: result.periodEnd };
   }
-  if (result.status === "unpaid") {
-    return { ok: true, status: "pending" };
-  }
-
-  // Paid: record the txn ref then activate via the SECURITY DEFINER RPC.
-  await supabase
-    .from("subscription_payments")
-    .update({ bakong_txn_ref: result.txnRef })
-    .eq("id", paymentId);
-
-  const { data: periodEnd, error } = await supabase.rpc(
-    "activate_subscription",
-    { p_payment: paymentId },
-  );
-  if (error) {
-    console.error("[billing.activate]", error);
-    return { ok: false, status: "pending", error: "Activation failed." };
-  }
-
-  revalidatePath("/admin/billing");
-  revalidatePath("/admin", "layout");
-  return { ok: true, status: "paid", periodEnd: periodEnd ?? null };
+  if (result.status === "expired") return { ok: true, status: "expired" };
+  return { ok: true, status: "pending" };
 }
 
 export type ManualProofState = { ok: boolean; error?: string; message?: string };
@@ -188,7 +169,7 @@ export async function submitManualSubscriptionProof(
     plan_id: plan.id,
     amount_usd: Number(plan.price_usd),
     method: "manual",
-    bill_number: newBillNumber(store.id),
+    bill_number: newSubscriptionTransactionId(store.id),
     proof_url: path,
     status: "pending",
   });

@@ -16,6 +16,7 @@ import {
   Receipt,
   Settings,
   CreditCard,
+  Wallet,
   MoreHorizontal,
   X,
 } from "lucide-react";
@@ -46,6 +47,7 @@ const PRIMARY_NAV: readonly NavItem[] = [
 const SECONDARY_NAV: readonly NavItem[] = [
   { href: "/admin/inventory", label: "Inventory", icon: Boxes },
   { href: "/admin/scan", label: "Scan", icon: ScanLine },
+  { href: "/admin/payments", label: "Payments", icon: Wallet },
   { href: "/admin/coupons", label: "Coupons", icon: Tag },
   { href: "/admin/notifications", label: "Alerts", icon: Bell, badge: true },
   { href: "/admin/billing", label: "Billing", icon: CreditCard, adminOnly: true },
@@ -57,7 +59,7 @@ const SIDEBAR_GROUPS: readonly { title: string; items: readonly NavItem[] }[] = 
   { title: "Overview", items: [PRIMARY_NAV[0]] },
   {
     title: "Sales",
-    items: [PRIMARY_NAV[1], PRIMARY_NAV[2], SECONDARY_NAV[2]],
+    items: [PRIMARY_NAV[1], PRIMARY_NAV[2], SECONDARY_NAV[2], SECONDARY_NAV[3]],
   },
   {
     title: "Catalog",
@@ -65,7 +67,7 @@ const SIDEBAR_GROUPS: readonly { title: string; items: readonly NavItem[] }[] = 
   },
   {
     title: "System",
-    items: [SECONDARY_NAV[3], SECONDARY_NAV[4], SECONDARY_NAV[5]],
+    items: [SECONDARY_NAV[4], SECONDARY_NAV[5], SECONDARY_NAV[6]],
   },
 ];
 
@@ -81,6 +83,7 @@ export function AdminShell({
   unreadNotifications = 0,
   businessName,
   logoUrl,
+  hiddenHrefs = [],
 }: {
   children: React.ReactNode;
   userName: string;
@@ -89,11 +92,14 @@ export function AdminShell({
   unreadNotifications?: number;
   businessName: string;
   logoUrl: string | null;
+  /** Nav destinations the store's plan doesn't include (e.g. /admin/pos). */
+  hiddenHrefs?: readonly string[];
 }) {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
 
-  const visible = (item: NavItem) => !item.adminOnly || isAdmin;
+  const visible = (item: NavItem) =>
+    (!item.adminOnly || isAdmin) && !hiddenHrefs.includes(item.href);
   const secondary = SECONDARY_NAV.filter(visible);
   // A secondary destination is active → highlight the "More" tab.
   const moreActive = secondary.some((i) => isActive(pathname, i));
@@ -195,7 +201,7 @@ export function AdminShell({
           aria-label="Admin"
         >
           <ul className="mx-auto flex max-w-md items-stretch justify-between px-2 py-1">
-            {PRIMARY_NAV.map((item) => (
+            {PRIMARY_NAV.filter(visible).map((item) => (
               <li key={item.href} className="flex-1">
                 <TabLink item={item} active={isActive(pathname, item)} />
               </li>

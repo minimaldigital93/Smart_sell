@@ -1,6 +1,7 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentStoreId } from "@/lib/tenant/context";
+import { getMyStoreId } from "@/services/stores";
 
 export type CouponRow = {
   id: string;
@@ -19,10 +20,15 @@ export type CouponRow = {
 
 export async function listCoupons(): Promise<CouponRow[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase
+  // Active coupons are publicly readable (checkout preview), so scope the
+  // admin list to the caller's store or it leaks other stores' codes (C3).
+  const storeId = await getMyStoreId();
+  let qb = supabase
     .from("coupons")
     .select("*")
     .order("created_at", { ascending: false });
+  if (storeId) qb = qb.eq("store_id", storeId);
+  const { data, error } = await qb;
   if (error) {
     console.error("[coupons.list]", error);
     return [];
@@ -32,11 +38,10 @@ export async function listCoupons(): Promise<CouponRow[]> {
 
 export async function getCoupon(id: string): Promise<CouponRow | null> {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("coupons")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle<CouponRow>();
+  const storeId = await getMyStoreId();
+  let qb = supabase.from("coupons").select("*").eq("id", id);
+  if (storeId) qb = qb.eq("store_id", storeId);
+  const { data, error } = await qb.maybeSingle<CouponRow>();
   if (error) {
     console.error("[coupons.get]", error);
     return null;

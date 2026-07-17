@@ -23,7 +23,6 @@ export type StoreContext = {
 
 function isStoreStatus(value: string | null): value is StoreStatus {
   return (
-    value === "trial" ||
     value === "active" ||
     value === "grace" ||
     value === "locked" ||

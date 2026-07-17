@@ -17,12 +17,9 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { FieldError } from "@/components/ui/field-error";
 import { PaymentMethodPicker } from "@/components/checkout/payment-method-picker";
-import { PaymentDisplay } from "@/components/checkout/payment-display";
-import { ScreenshotUpload } from "@/components/checkout/screenshot-upload";
 import { OrderSummary } from "@/components/checkout/order-summary";
 import { CartSummary } from "@/components/cart/cart-summary";
 import { CouponField, type AppliedCoupon } from "@/components/checkout/coupon-field";
-import { PointsField, type AppliedPoints } from "@/components/checkout/points-field";
 import { useFormatPrice } from "@/lib/settings/store-config";
 
 type CheckoutFormValues = CheckoutCustomerValues & { password?: string };
@@ -30,13 +27,14 @@ type CheckoutFormValues = CheckoutCustomerValues & { password?: string };
 export function CheckoutForm({
   defaultName,
   defaultPhone,
-  loyaltyPoints = 0,
   isAuthenticated = false,
+  khqrAvailable = false,
 }: {
   defaultName?: string | null;
   defaultPhone?: string | null;
-  loyaltyPoints?: number;
   isAuthenticated?: boolean;
+  /** Whether this store can take dynamic KHQR payments. */
+  khqrAvailable?: boolean;
 }) {
   "use no memo";
   const router = useRouter();
@@ -44,14 +42,11 @@ export function CheckoutForm({
   const items = useCartStore((s) => s.items);
   const subtotal = useCartStore((s) => s.subtotal());
   const [submitting, setSubmitting] = useState(false);
-  const [screenshot, setScreenshot] = useState<File | null>(null);
   const [coupon, setCoupon] = useState<AppliedCoupon | null>(null);
-  const [points, setPoints] = useState<AppliedPoints | null>(null);
 
   const {
     register,
     handleSubmit,
-    watch,
     control,
     formState: { errors },
   } = useForm<CheckoutFormValues>({
@@ -63,21 +58,14 @@ export function CheckoutForm({
       phone: defaultPhone ?? "",
       address: "",
       note: "",
-      payment_method: "khqr",
+      payment_method: khqrAvailable ? "khqr" : "cash",
       password: "",
     },
   });
 
-  // eslint-disable-next-line react-hooks/incompatible-library
-  const paymentMethod = watch("payment_method");
-
   async function onSubmit(values: CheckoutFormValues) {
     if (items.length === 0) {
       toast.error("Your cart is empty.");
-      return;
-    }
-    if (!screenshot) {
-      toast.error("Please attach your payment screenshot.");
       return;
     }
 
@@ -94,12 +82,10 @@ export function CheckoutForm({
         items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
       ),
     );
-    fd.append("screenshot", screenshot);
     if (!isAuthenticated && values.password) {
       fd.append("password", values.password);
     }
     if (coupon) fd.append("coupon_code", coupon.code);
-    if (points) fd.append("points_to_redeem", String(points.points));
 
     const result = await submitOrderAction(fd);
     if (!result.ok) {
@@ -108,7 +94,13 @@ export function CheckoutForm({
       return;
     }
 
-    router.push(`/checkout/success/${result.orderId}`);
+    // KHQR: continue to the payment page (QR / checkout link + live status).
+    // Cash: the order is placed — straight to the confirmation.
+    if (result.payToken) {
+      router.push(`/checkout/pay/${result.payToken}`);
+    } else {
+      router.push(`/checkout/success/${result.orderId}`);
+    }
   }
 
   return (
@@ -194,25 +186,10 @@ export function CheckoutForm({
         <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
           Payment method
         </h2>
-        <PaymentMethodPicker control={control} />
-      </section>
-
-      <PaymentDisplay method={paymentMethod} />
-
-      <section className="rounded-2xl border border-border bg-card p-5 shadow-soft">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-          Payment screenshot
-        </h2>
-        <ScreenshotUpload onChange={setScreenshot} />
+        <PaymentMethodPicker control={control} khqrAvailable={khqrAvailable} />
       </section>
 
       <CouponField subtotal={subtotal} onChange={setCoupon} />
-
-      <PointsField
-        balance={loyaltyPoints}
-        subtotal={subtotal}
-        onChange={setPoints}
-      />
 
       <CartSummary />
 
@@ -224,19 +201,6 @@ export function CheckoutForm({
             </span>
             <span className="font-medium text-success tabular-nums">
               −{formatPrice(coupon.discount)}
-            </span>
-          </div>
-        </div>
-      ) : null}
-
-      {points && points.discount > 0 ? (
-        <div className="-mt-3 rounded-2xl border border-pink-200 bg-pink-50/50 px-5 py-3 text-sm">
-          <div className="flex items-baseline justify-between">
-            <span className="text-muted-foreground">
-              Points ({points.points} pts)
-            </span>
-            <span className="font-medium text-pink-600 tabular-nums">
-              −{formatPrice(points.discount)}
             </span>
           </div>
         </div>

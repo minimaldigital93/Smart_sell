@@ -4,8 +4,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireStaff } from "@/lib/auth/session";
+import { requireProductCapacity } from "@/lib/billing/capabilities";
 import { productInputSchema } from "@/lib/products/schemas";
 import { slugify } from "@/lib/products/barcode";
+import type { ProductInsert } from "@/types";
 
 export type ProductActionResult =
   | { ok: true; id: string }
@@ -32,6 +34,8 @@ function normalize(values: Record<string, unknown>) {
 
 export async function createProductAction(input: unknown): Promise<ProductActionResult> {
   await requireStaff();
+  const capacity = await requireProductCapacity();
+  if (!capacity.ok) return { ok: false, error: capacity.error };
   const parsed = productInputSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
@@ -61,9 +65,10 @@ export async function createProductAction(input: unknown): Promise<ProductAction
     stock: v.initial_stock,
   });
 
+  // normalize() erases the field types; the shape matches ProductInsert.
   const { error } = await supabase
     .from("products")
-    .insert(payload as never);
+    .insert(payload as ProductInsert);
 
   if (error) {
     if (error.code === "23505") {
@@ -107,7 +112,7 @@ export async function updateProductAction(input: unknown): Promise<ProductAction
 
   const { error } = await supabase
     .from("products")
-    .update(payload as never)
+    .update(payload as Partial<ProductInsert>)
     .eq("id", v.id!);
 
   if (error) {

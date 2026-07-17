@@ -43,6 +43,10 @@ export function computeDiscount(
     discountType === "percent"
       ? (subtotal * discountValue) / 100
       : discountValue;
-  // Cap at subtotal so total never goes negative.
-  return Number(Math.min(raw, subtotal).toFixed(2));
+  // Cap at subtotal so total never goes negative, then round half-up to cents
+  // exactly like the SQL round() in create_customer_order — toFixed() rounds
+  // x.xx5 DOWN through float representation (16.665 → "16.66"), which made the
+  // preview disagree with the charged discount by a cent. The 1e-9 nudge
+  // compensates for binary float error at this magnitude.
+  return Math.round(Math.min(raw, subtotal) * 100 + 1e-9) / 100;
 }

@@ -1,9 +1,12 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getOrderById } from "@/services/orders";
+import { getOpenKhqrPayment } from "@/services/payments";
 import { requireUser } from "@/lib/auth/session";
-import { formatPrice } from "@/lib/utils";
+import { formatPrice, cn } from "@/lib/utils";
 import { getStoreSettings } from "@/services/settings";
-import { PAYMENT_INSTRUCTIONS } from "@/lib/checkout/payment-instructions";
+import { buttonVariants } from "@/components/ui/button";
+import { PAYMENT_METHOD_LABEL } from "@/lib/constants";
 import { ClientDate } from "@/components/shared/client-date";
 import { getSignedStorageUrl } from "@/lib/storage/signed-url";
 
@@ -35,10 +38,14 @@ export default async function OrderDetailPage({ params }: { params: Params }) {
   if (!data) notFound();
   const { order, items } = data;
   const { currency } = await getStoreSettings();
-  const receiptUrl = await getSignedStorageUrl(
-    "payment-proofs",
-    order.payment_image,
-  );
+  // Legacy pre-0047 orders carry an uploaded screenshot; new khqr orders may
+  // still have a payable attempt the customer can finish.
+  const [receiptUrl, openPayment] = await Promise.all([
+    getSignedStorageUrl("payment-proofs", order.payment_image),
+    order.status === "pending" && order.payment_method === "khqr"
+      ? getOpenKhqrPayment(order.id)
+      : Promise.resolve(null),
+  ]);
   const reachedIndex = STATUS_STEPS.indexOf(
     order.status as (typeof STATUS_STEPS)[number],
   );
@@ -132,8 +139,16 @@ export default async function OrderDetailPage({ params }: { params: Params }) {
           Payment
         </h2>
         <p className="text-sm font-medium">
-          {PAYMENT_INSTRUCTIONS[order.payment_method].label}
+          {PAYMENT_METHOD_LABEL[order.payment_method]}
         </p>
+        {openPayment ? (
+          <Link
+            href={`/checkout/pay/${openPayment.public_token}`}
+            className={cn(buttonVariants({ size: "lg" }), "mt-3 w-full")}
+          >
+            Complete payment
+          </Link>
+        ) : null}
         {receiptUrl ? (
           <a
             href={receiptUrl}

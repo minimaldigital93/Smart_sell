@@ -12,7 +12,6 @@ export type Json =
 
 export type UserRoleEnum = "superadmin" | "admin" | "staff" | "customer";
 export type StoreStatusEnum =
-  | "trial"
   | "active"
   | "grace"
   | "locked"
@@ -31,8 +30,17 @@ export type OrderStatusEnum =
   | "delivered"
   | "cancelled";
 export type PaymentMethodEnum = "khqr" | "aba" | "acleda" | "wing" | "cash";
+export type OrderPaymentStatusEnum =
+  | "pending"
+  | "qr_generated"
+  | "waiting_payment"
+  | "paid"
+  | "failed"
+  | "expired"
+  | "cancelled"
+  | "refunded"
+  | "rejected";
 export type MovementTypeEnum = "in" | "out" | "adjustment";
-export type LoyaltyTransactionTypeEnum = "earn" | "redeem" | "expire" | "manual";
 export type NotificationTypeEnum = "order" | "inventory" | "promo" | "system";
 export type NotificationAudienceEnum = "all" | "staff";
 
@@ -49,7 +57,6 @@ export type Database = {
           email: string | null;
           phone: string | null;
           store_id: string | null;
-          loyalty_points: number;
           created_at: Timestamp;
           updated_at: Timestamp;
         };
@@ -365,25 +372,6 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["notifications"]["Row"]>;
         Relationships: [];
       };
-      loyalty_transactions: {
-        Row: {
-          id: string;
-          store_id: string;
-          user_id: string;
-          order_id: string | null;
-          type: LoyaltyTransactionTypeEnum;
-          points: number;
-          balance_after: number;
-          note: string | null;
-          created_at: Timestamp;
-        };
-        Insert: Omit<
-          Database["public"]["Tables"]["loyalty_transactions"]["Row"],
-          "id" | "created_at" | "store_id"
-        > & { id?: string; store_id?: string };
-        Update: Partial<Database["public"]["Tables"]["loyalty_transactions"]["Row"]>;
-        Relationships: [];
-      };
       store_settings: {
         Row: {
           id: number | null;
@@ -439,7 +427,7 @@ export type Database = {
           id: string;
           store_id: string;
           plan_id: string | null;
-          status: "trialing" | "active" | "past_due" | "canceled";
+          status: "active" | "past_due" | "canceled";
           current_period_start: Timestamp | null;
           current_period_end: Timestamp | null;
           trial_ends_at: Timestamp | null;
@@ -451,7 +439,7 @@ export type Database = {
           id?: string;
           store_id: string;
           plan_id?: string | null;
-          status?: "trialing" | "active" | "past_due" | "canceled";
+          status?: "active" | "past_due" | "canceled";
           current_period_start?: Timestamp | null;
           current_period_end?: Timestamp | null;
           trial_ends_at?: Timestamp | null;
@@ -477,8 +465,15 @@ export type Database = {
           bill_number: string | null;
           bakong_md5: string | null;
           bakong_txn_ref: string | null;
-          status: "pending" | "paid" | "failed" | "expired";
+          status: OrderPaymentStatusEnum;
           proof_url: string | null;
+          transaction_id: string | null;
+          public_token: string | null;
+          provider_ref: string | null;
+          checkout_url: string | null;
+          qr_payload: string | null;
+          expires_at: Timestamp | null;
+          last_checked_at: Timestamp | null;
           paid_at: Timestamp | null;
           created_at: Timestamp;
           updated_at: Timestamp;
@@ -492,8 +487,15 @@ export type Database = {
           bill_number?: string | null;
           bakong_md5?: string | null;
           bakong_txn_ref?: string | null;
-          status?: "pending" | "paid" | "failed" | "expired";
+          status?: OrderPaymentStatusEnum;
           proof_url?: string | null;
+          transaction_id?: string | null;
+          public_token?: string | null;
+          provider_ref?: string | null;
+          checkout_url?: string | null;
+          qr_payload?: string | null;
+          expires_at?: Timestamp | null;
+          last_checked_at?: Timestamp | null;
           paid_at?: Timestamp | null;
         };
         Update: Partial<
@@ -507,6 +509,113 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      store_payment_settings: {
+        Row: {
+          store_id: string;
+          khqrpay_enabled: boolean;
+          khqrpay_profile_id: string | null;
+          khqrpay_secret: string | null;
+          currency: "USD" | "KHR";
+          updated_at: Timestamp;
+          updated_by: string | null;
+        };
+        Insert: {
+          store_id: string;
+          khqrpay_enabled?: boolean;
+          khqrpay_profile_id?: string | null;
+          khqrpay_secret?: string | null;
+          currency?: "USD" | "KHR";
+          updated_by?: string | null;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["store_payment_settings"]["Row"]
+        >;
+        Relationships: [];
+      };
+      order_payments: {
+        Row: {
+          id: string;
+          store_id: string;
+          order_id: string;
+          method: PaymentMethodEnum;
+          status: OrderPaymentStatusEnum;
+          amount: number;
+          currency: string;
+          transaction_id: string | null;
+          public_token: string;
+          provider: string | null;
+          provider_ref: string | null;
+          checkout_url: string | null;
+          qr_payload: string | null;
+          expires_at: Timestamp | null;
+          last_checked_at: Timestamp | null;
+          paid_at: Timestamp | null;
+          received_by: string | null;
+          created_at: Timestamp;
+          updated_at: Timestamp;
+        };
+        Insert: {
+          id?: string;
+          store_id: string;
+          order_id: string;
+          method: PaymentMethodEnum;
+          status?: OrderPaymentStatusEnum;
+          amount: number;
+          currency?: string;
+          transaction_id?: string | null;
+          public_token?: string;
+          provider?: string | null;
+          provider_ref?: string | null;
+          checkout_url?: string | null;
+          qr_payload?: string | null;
+          expires_at?: Timestamp | null;
+          last_checked_at?: Timestamp | null;
+          paid_at?: Timestamp | null;
+          received_by?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["order_payments"]["Row"]>;
+        Relationships: [
+          {
+            foreignKeyName: "order_payments_order_id_fkey";
+            columns: ["order_id"];
+            referencedRelation: "orders";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      payment_webhooks: {
+        Row: {
+          id: string;
+          provider: string;
+          event_id: string;
+          transaction_id: string | null;
+          order_payment_id: string | null;
+          subscription_payment_id: string | null;
+          status: "received" | "processed" | "duplicate" | "invalid" | "ignored";
+          signature_valid: boolean;
+          http_status: number | null;
+          payload: Json;
+          error: string | null;
+          received_at: Timestamp;
+          processed_at: Timestamp | null;
+        };
+        Insert: {
+          id?: string;
+          provider?: string;
+          event_id: string;
+          transaction_id?: string | null;
+          order_payment_id?: string | null;
+          subscription_payment_id?: string | null;
+          status?: "received" | "processed" | "duplicate" | "invalid" | "ignored";
+          signature_valid?: boolean;
+          http_status?: number | null;
+          payload?: Json;
+          error?: string | null;
+          processed_at?: Timestamp | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["payment_webhooks"]["Row"]>;
+        Relationships: [];
       };
       platform_expenses: {
         Row: {
@@ -534,7 +643,41 @@ export type Database = {
         Relationships: [];
       };
     };
-    Views: Record<string, never>;
+    Views: {
+      v_admin_dashboard: {
+        Row: {
+          total_orders: number;
+          pending_orders: number;
+          active_orders: number;
+          total_revenue: number;
+          low_stock_count: number;
+          out_of_stock_count: number;
+          active_products: number;
+          total_units: number;
+        };
+        Relationships: [];
+      };
+      v_sales_by_day: {
+        Row: {
+          day: string;
+          orders: number;
+          revenue: number;
+        };
+        Relationships: [];
+      };
+      v_low_stock_products: {
+        Row: {
+          product_id: string;
+          name: string;
+          slug: string;
+          category: ProductCategoryEnum | null;
+          current_stock: number;
+          minimum_stock: number;
+          is_out_of_stock: boolean;
+        };
+        Relationships: [];
+      };
+    };
     Functions: {
       is_admin: { Args: Record<string, never>; Returns: boolean };
       is_staff: { Args: Record<string, never>; Returns: boolean };
@@ -577,7 +720,7 @@ export type Database = {
         Returns: {
           mrr: number;
           active_stores: number;
-          trial_stores: number;
+          total_stores: number;
           overdue_stores: number;
           total_revenue: number;
           total_expense: number;
@@ -601,23 +744,6 @@ export type Database = {
         Args: { p_order_id: string };
         Returns: null;
       };
-      earn_loyalty_points: {
-        Args: { p_user_id: string; p_order_id: string; p_total: number };
-        Returns: number;
-      };
-      redeem_loyalty_points: {
-        Args: { p_user_id: string; p_order_id: string; p_points: number };
-        Returns: number;
-      };
-      redeem_coupon: {
-        Args: { p_code: string };
-        Returns: {
-          id: string;
-          code: string;
-          redeemed_count: number;
-          max_redemptions: number | null;
-        }[];
-      };
       create_customer_order: {
         Args: {
           p_order_id: string;
@@ -626,20 +752,47 @@ export type Database = {
           p_address: string;
           p_note: string | null;
           p_payment_method: PaymentMethodEnum;
-          p_payment_image: string | null;
           p_items: { product_id: string; quantity: number }[];
           p_coupon_code?: string | null;
-          p_points?: number;
           p_store_id?: string | null;
+          p_payment_image?: string | null;
         };
         Returns: { order_id: string; total: number };
       };
-      unredeem_coupon: {
-        Args: { p_code: string };
-        Returns: null;
-      };
       refund_order_credits: {
         Args: { p_order_id: string };
+        Returns: null;
+      };
+      store_khqr_configured: {
+        Args: { p_store: string };
+        Returns: boolean;
+      };
+      finalize_order_payment: {
+        Args: { p_id: string };
+        Returns: string;
+      };
+      mark_order_payment_waiting: {
+        Args: { p_id: string };
+        Returns: null;
+      };
+      expire_order_payment: {
+        Args: { p_id: string };
+        Returns: boolean;
+      };
+      retire_open_order_payments: {
+        Args: { p_order: string };
+        Returns: null;
+      };
+      mark_cash_order_payment_paid: {
+        Args: { p_id: string; p_cashier: string };
+        Returns: string;
+      };
+      finalize_subscription_payment: {
+        Args: { p_payment: string };
+        Returns: Timestamp;
+      };
+      retire_open_subscription_payments: {
+        Args: { p_store: string };
         Returns: null;
       };
       check_rate_limit: {
@@ -658,7 +811,6 @@ export type Database = {
       payment_method: PaymentMethodEnum;
       movement_type: MovementTypeEnum;
       notification_type: NotificationTypeEnum;
-      loyalty_transaction_type: LoyaltyTransactionTypeEnum;
     };
   };
 };

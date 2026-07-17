@@ -30,10 +30,12 @@ import { BarcodeScanner } from "@/components/admin/scanner/barcode-scanner";
 type Props = {
   mode: "new" | "edit";
   categories: Pick<ShopCategory, "id" | "name">[];
+  /** Owning store — image uploads must live under stores/{id}/ (0045). */
+  storeId: string | null;
   defaults?: Partial<ProductInputValues> & { id?: string };
 };
 
-export function ProductForm({ mode, categories, defaults }: Props) {
+export function ProductForm({ mode, categories, storeId, defaults }: Props) {
   "use no memo";
   const router = useRouter();
   const productId = useMemo(
@@ -102,6 +104,7 @@ export function ProductForm({ mode, categories, defaults }: Props) {
           render={({ field }) => (
             <ProductImageUpload
               productId={productId}
+              storeId={storeId}
               images={field.value ?? []}
               onChange={field.onChange}
             />

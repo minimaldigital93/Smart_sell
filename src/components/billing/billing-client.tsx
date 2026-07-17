@@ -2,14 +2,14 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check } from "lucide-react";
+import { Check, ExternalLink } from "lucide-react";
 import {
   startSubscriptionCheckout,
   checkSubscriptionPayment,
 } from "@/app/actions/subscriptions";
 import { formatPrice } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { KhqrDisplay } from "./khqr-display";
+import { QrImage } from "@/components/payments/qr-image";
 import { ManualProofForm } from "./manual-proof-form";
 
 export type BillingPlan = {
@@ -20,7 +20,7 @@ export type BillingPlan = {
   features: string[];
 };
 
-type Phase = "idle" | "qr" | "manual" | "paid";
+type Phase = "idle" | "khqr" | "manual" | "paid";
 
 export function BillingClient({ plans }: { plans: BillingPlan[] }) {
   const router = useRouter();
@@ -28,7 +28,8 @@ export function BillingClient({ plans }: { plans: BillingPlan[] }) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<BillingPlan | null>(null);
-  const [qr, setQr] = useState<string | null>(null);
+  const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
+  const [qrPayload, setQrPayload] = useState<string | null>(null);
   const [paymentId, setPaymentId] = useState<string | null>(null);
   const [polling, setPolling] = useState(false);
 
@@ -43,9 +44,10 @@ export function BillingClient({ plans }: { plans: BillingPlan[] }) {
         return;
       }
       setPaymentId(res.paymentId ?? null);
-      if (res.automated && res.qr) {
-        setQr(res.qr);
-        setPhase("qr");
+      if (res.automated) {
+        setCheckoutUrl(res.checkoutUrl ?? null);
+        setQrPayload(res.qrPayload ?? null);
+        setPhase("khqr");
         setPolling(true);
       } else {
         setPhase("manual");
@@ -60,7 +62,7 @@ export function BillingClient({ plans }: { plans: BillingPlan[] }) {
         setPolling(false);
         setPhase("paid");
         router.refresh();
-      } else if (res.status === "unavailable") {
+      } else if (res.status === "expired" || res.status === "unavailable") {
         setPolling(false);
         setPhase("manual");
       }
@@ -82,13 +84,24 @@ export function BillingClient({ plans }: { plans: BillingPlan[] }) {
     );
   }
 
-  if (phase === "qr" && qr && selected) {
+  if (phase === "khqr" && selected) {
     return (
       <div className="bg-card flex flex-col items-center gap-3 rounded-2xl border p-6 text-center">
         <p className="text-sm font-medium">
-          Scan to pay {formatPrice(selected.price_usd)} — {selected.name}
+          Pay {formatPrice(selected.price_usd)} — {selected.name}
         </p>
-        <KhqrDisplay value={qr} />
+        {qrPayload ? <QrImage value={qrPayload} /> : null}
+        {checkoutUrl ? (
+          <a
+            href={checkoutUrl}
+            target="_blank"
+            rel="noopener"
+            className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-6 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+          >
+            <ExternalLink className="h-4 w-4" />
+            Pay with KHQR
+          </a>
+        ) : null}
         <p className="text-muted-foreground text-sm">
           Waiting for payment… this updates automatically.
         </p>
@@ -111,7 +124,8 @@ export function BillingClient({ plans }: { plans: BillingPlan[] }) {
             {selected.name} — {formatPrice(selected.price_usd)}/month
           </p>
           <p className="text-muted-foreground text-sm">
-            Pay to the store&rsquo;s KHQR/bank account, then upload your receipt.
+            Pay to the platform&rsquo;s KHQR/bank account, then upload your
+            receipt.
           </p>
         </div>
         <ManualProofForm planCode={selected.code} />

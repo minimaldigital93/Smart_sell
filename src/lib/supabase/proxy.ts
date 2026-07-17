@@ -50,6 +50,13 @@ export async function updateSession(request: NextRequest) {
 
   const requestHeaders = new Headers(request.headers);
 
+  // Never trust inbound tenant headers: without this, a client-supplied
+  // x-store-id survives whenever resolution fails or is skipped and every
+  // downstream service would act on the attacker's store (audit C5).
+  requestHeaders.delete(STORE_ID_HEADER);
+  requestHeaders.delete(STORE_SLUG_HEADER);
+  requestHeaders.delete(STORE_STATUS_HEADER);
+
   let storeStatus: string | null = null;
   let strippedPath: string | null = null;
 

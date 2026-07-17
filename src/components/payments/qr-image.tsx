@@ -4,12 +4,12 @@ import { useEffect, useState } from "react";
 import QRCode from "qrcode";
 
 /** Render a KHQR payload string as a scannable QR image (generated locally). */
-export function KhqrDisplay({ value }: { value: string }) {
+export function QrImage({ value, size = 256 }: { value: string; size?: number }) {
   const [src, setSrc] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
-    QRCode.toDataURL(value, { width: 256, margin: 1 })
+    QRCode.toDataURL(value, { width: size, margin: 1 })
       .then((url) => {
         if (active) setSrc(url);
       })
@@ -19,11 +19,14 @@ export function KhqrDisplay({ value }: { value: string }) {
     return () => {
       active = false;
     };
-  }, [value]);
+  }, [value, size]);
 
   if (!src) {
     return (
-      <div className="bg-muted text-muted-foreground grid h-64 w-64 place-items-center rounded-xl text-sm">
+      <div
+        className="bg-muted text-muted-foreground grid place-items-center rounded-xl text-sm"
+        style={{ width: size, height: size }}
+      >
         Generating QR…
       </div>
     );
@@ -35,8 +38,8 @@ export function KhqrDisplay({ value }: { value: string }) {
     <img
       src={src}
       alt="KHQR payment code"
-      width={256}
-      height={256}
+      width={size}
+      height={size}
       className="rounded-xl border"
     />
   );

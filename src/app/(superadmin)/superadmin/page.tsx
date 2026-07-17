@@ -42,7 +42,7 @@ export default async function SuperadminOverviewPage() {
         <KpiCard
           label="Active stores"
           value={String(summary.active_stores)}
-          hint={`${summary.trial_stores} on trial`}
+          hint={`${summary.total_stores} total`}
           icon={<Store className="h-4 w-4" />}
         />
         <KpiCard

@@ -55,7 +55,6 @@ export default async function PlansPage() {
                 <p>
                   {[
                     limits.coupons && "Coupons",
-                    limits.loyalty && "Loyalty",
                     limits.pos && "POS",
                     limits.custom_domain && "Custom domain",
                     limits.advanced_analytics && "Analytics",

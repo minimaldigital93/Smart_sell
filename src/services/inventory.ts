@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getSignedStorageUrl } from "@/lib/storage/signed-url";
+import { getMyStoreId } from "@/services/stores";
+import { escapeLikePattern } from "@/lib/utils";
 import type { MovementTypeEnum } from "@/types/database";
 import type { InventoryMovement, ProductInventory } from "@/types";
 
@@ -45,38 +47,28 @@ export async function applyInventoryMovement(params: {
 }
 
 export async function getInventoryStats(): Promise<InventoryStats> {
+  // v_admin_dashboard is store-scoped (0044) and already aggregates all four
+  // numbers — one row instead of scanning product_inventory in JS.
   const supabase = await createClient();
-  const [{ count: active }, { data: stockAgg }, { count: low }, { count: out }] =
-    await Promise.all([
-      supabase
-        .from("products")
-        .select("*", { count: "exact", head: true })
-        .eq("is_active", true),
-      supabase.from("product_inventory").select("current_stock"),
-      supabase
-        .from("product_inventory")
-        .select("*", { count: "exact", head: true })
-        .lte("current_stock", 999999) // placeholder; filtered in JS below
-        .order("current_stock"),
-      supabase
-        .from("product_inventory")
-        .select("*", { count: "exact", head: true })
-        .eq("current_stock", 0),
-    ]);
+  const { data, error } = await supabase
+    .from("v_admin_dashboard")
+    .select("active_products, total_units, low_stock_count, out_of_stock_count")
+    .maybeSingle<InventoryStats>();
 
-  const total_units =
-    (stockAgg ?? []).reduce((s, r) => s + (r.current_stock ?? 0), 0) ?? 0;
-
-  // Re-derive low-stock count properly (current_stock <= minimum_stock).
-  const { count: lowExact } = await supabase
-    .from("v_low_stock_products" as never)
-    .select("*", { count: "exact", head: true });
-
+  if (error || !data) {
+    if (error) console.error("[inventory.stats]", error);
+    return {
+      active_products: 0,
+      total_units: 0,
+      low_stock_count: 0,
+      out_of_stock_count: 0,
+    };
+  }
   return {
-    active_products: active ?? 0,
-    total_units,
-    low_stock_count: lowExact ?? low ?? 0,
-    out_of_stock_count: out ?? 0,
+    active_products: data.active_products ?? 0,
+    total_units: Number(data.total_units ?? 0),
+    low_stock_count: data.low_stock_count ?? 0,
+    out_of_stock_count: data.out_of_stock_count ?? 0,
   };
 }
 
@@ -87,6 +79,10 @@ export async function listInventory(opts: {
 }): Promise<InventoryRow[]> {
   const { q, lowOnly = false, limit = 50 } = opts;
   const supabase = await createClient();
+  // product_inventory is publicly readable (storefront stock badges), so the
+  // store filter here is what keeps one store's inventory page from listing
+  // the whole platform's stock (audit C3).
+  const storeId = await getMyStoreId();
   let qb = supabase
     .from("product_inventory")
     .select(
@@ -95,9 +91,9 @@ export async function listInventory(opts: {
     .order("current_stock", { ascending: true })
     .limit(limit);
 
+  if (storeId) qb = qb.eq("store_id", storeId);
   if (q && q.trim()) {
-    const escaped = q.trim().replace(/[%_]/g, (m) => `\\${m}`);
-    const pattern = `%${escaped}%`;
+    const pattern = `%${escapeLikePattern(q)}%`;
     qb = qb.or(`name.ilike.${pattern}`, { referencedTable: "products" });
   }
 
@@ -114,11 +110,13 @@ export async function listInventory(opts: {
 
 export async function getInventory(productId: string): Promise<ProductInventory | null> {
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const storeId = await getMyStoreId();
+  let qb = supabase
     .from("product_inventory")
     .select("*")
-    .eq("product_id", productId)
-    .maybeSingle();
+    .eq("product_id", productId);
+  if (storeId) qb = qb.eq("store_id", storeId);
+  const { data, error } = await qb.maybeSingle();
   if (error) {
     console.error("[inventory.get]", error);
     return null;
@@ -133,12 +131,14 @@ export async function listMovements(opts: {
 }): Promise<MovementWithProduct[]> {
   const { productId, before, limit = 30 } = opts;
   const supabase = await createClient();
+  const storeId = await getMyStoreId();
   let qb = supabase
     .from("inventory_movements")
     .select("*, product:products(id, name, slug, images)")
     .order("created_at", { ascending: false })
     .limit(limit);
 
+  if (storeId) qb = qb.eq("store_id", storeId);
   if (productId) qb = qb.eq("product_id", productId);
   if (before) qb = qb.lt("created_at", before);
 

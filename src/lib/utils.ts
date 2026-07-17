@@ -46,3 +46,16 @@ export function discountPercent(price: number, discount: number): number {
   if (price <= 0 || discount >= price) return 0;
   return Math.round(((price - discount) / price) * 100);
 }
+
+/**
+ * Make raw user input safe to embed in a PostgREST `.or()` ilike pattern:
+ * escape LIKE wildcards, and neutralize the `.or()` expression syntax
+ * (commas, parens, quotes) that would otherwise corrupt or alter the filter.
+ */
+export function escapeLikePattern(input: string): string {
+  return input
+    .replace(/[\\%_]/g, (m) => `\\${m}`)
+    .replace(/[(),"]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}

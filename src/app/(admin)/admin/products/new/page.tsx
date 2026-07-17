@@ -1,10 +1,14 @@
 import { ProductForm } from "@/components/admin/product-form";
 import { listActiveCategories } from "@/services/categories";
+import { getMyStoreId } from "@/services/stores";
 
 export const metadata = { title: "New product" };
 
 export default async function NewProductPage() {
-  const categories = await listActiveCategories();
+  const [categories, storeId] = await Promise.all([
+    listActiveCategories(),
+    getMyStoreId(),
+  ]);
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-5">
       <header>
@@ -14,7 +18,7 @@ export default async function NewProductPage() {
           set to active.
         </p>
       </header>
-      <ProductForm mode="new" categories={categories} />
+      <ProductForm mode="new" categories={categories} storeId={storeId} />
     </div>
   );
 }

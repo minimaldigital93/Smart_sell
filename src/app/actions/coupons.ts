@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireStaff } from "@/lib/auth/session";
+import { requirePlanCapability } from "@/lib/billing/capabilities";
 import {
   couponFormSchema,
   validateCouponSchema,
@@ -89,6 +90,8 @@ export async function createCouponAction(
   formData: FormData,
 ): Promise<CouponMutationResult> {
   await requireStaff();
+  const gate = await requirePlanCapability("coupons");
+  if (!gate.ok) return { ok: false, error: gate.error };
   const parsed = parseForm(formData);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
@@ -124,6 +127,8 @@ export async function updateCouponAction(
   formData: FormData,
 ): Promise<CouponMutationResult> {
   await requireStaff();
+  const gate = await requirePlanCapability("coupons");
+  if (!gate.ok) return { ok: false, error: gate.error };
   const parsed = parseForm(formData);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };

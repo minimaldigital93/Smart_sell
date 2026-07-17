@@ -5,7 +5,24 @@ action and data service, middleware/tenant resolution, validation schemas, PWA
 layer, and the key interactive components. Every finding cites the file(s) it
 was observed in. `npx tsc --noEmit` passes clean. No automated tests exist._
 
-**Verdict: NOT ready for commercial multi-tenant launch. Overall readiness ≈ 40%.**
+> **REMEDIATION STATUS (2026-07-17, Phase 16 — migrations 0043–0048):**
+> - **Fixed:** C1 (grants revoked/guarded, 0043), C2 (role/store_id pinned, 0043),
+>   C3 (services/views/storage tenant-scoped, 0044/0045 + `getMyStoreId()` filters),
+>   C4 (was already fixed in 0042), C5 (headers stripped in proxy.ts), C7 partially
+>   (Vitest + 38 unit tests; no E2E yet), H1 (plan gating via
+>   `lib/billing/capabilities.ts`), H3, H4, H8 (count/head queries + view
+>   aggregation), H10 (`escapeLikePattern`), M15, M17 (ICT day buckets), bug 9
+>   (`getMySubscription` scoped), bug 11 (image remove no longer deletes storage).
+> - **Removed outright:** the loyalty feature (C1 loyalty exploits, H2 — 0046) and
+>   the half-wired trial path (0043). Manual payment screenshots replaced by the
+>   khqr.cc payment platform (0047/0048) with a real `order_payments` ledger,
+>   webhook audit, and payment state machine.
+> - **Accepted / still open:** C6 (default credentials — owner decision), H5 (no
+>   stock reservation; settled-but-unfulfillable payments alert staff and stay
+>   open), M12 (PostgREST-direct rate-limit bypass), and the M-series retail gaps
+>   (COGS, tax, returns, receipts, exports…). See docs/06 for the live list.
+
+**Verdict at audit time: NOT ready for commercial multi-tenant launch. Overall readiness ≈ 40%.**
 
 The single-store core (storefront → checkout → order → inventory ledger) is
 genuinely well built — `create_customer_order` and `apply_inventory_movement`

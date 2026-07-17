@@ -26,12 +26,6 @@ export default async function StoreDetailPage({
     ["Owner phone", store.owner?.phone ?? "—"],
     ["Plan", store.plan ? `${store.plan.name} · ${formatPrice(store.plan.price_usd)}` : "—"],
     [
-      "Trial ends",
-      store.trial_ends_at
-        ? new Date(store.trial_ends_at).toLocaleString()
-        : "—",
-    ],
-    [
       "Period ends",
       store.current_period_end
         ? new Date(store.current_period_end).toLocaleString()

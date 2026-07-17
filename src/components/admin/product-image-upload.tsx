@@ -12,10 +12,13 @@ const ALLOWED = ["image/png", "image/jpeg", "image/webp", "image/avif"];
 
 export function ProductImageUpload({
   productId,
+  storeId,
   images,
   onChange,
 }: {
   productId: string;
+  /** Owning store — storage policies require store-prefixed paths (0045). */
+  storeId: string | null;
   images: string[];
   onChange: (next: string[]) => void;
 }) {
@@ -39,7 +42,8 @@ export function ProductImageUpload({
       }
 
       const ext = (file.name.split(".").pop() ?? "png").toLowerCase().slice(0, 4);
-      const path = `${productId}/${crypto.randomUUID()}.${ext}`;
+      const prefix = storeId ? `stores/${storeId}/` : "";
+      const path = `${prefix}${productId}/${crypto.randomUUID()}.${ext}`;
       const { error } = await supabase.storage
         .from("product-images")
         .upload(path, file, { cacheControl: "3600", upsert: false });
@@ -59,15 +63,10 @@ export function ProductImageUpload({
   }
 
   function remove(url: string) {
+    // Only drop the URL from the (unsaved) form state — deleting the storage
+    // object here would break the product if the user then cancels the form.
+    // Orphaned files are an accepted cost.
     onChange(images.filter((u) => u !== url));
-    // Best-effort delete from storage
-    const supabase = createClient();
-    const marker = "/product-images/";
-    const idx = url.indexOf(marker);
-    if (idx >= 0) {
-      const path = url.slice(idx + marker.length);
-      supabase.storage.from("product-images").remove([path]).catch(() => {});
-    }
   }
 
   return (

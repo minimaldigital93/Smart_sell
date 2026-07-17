@@ -7,14 +7,18 @@ import { toast } from "sonner";
 import { ScanLine, Minus, Plus, Trash2, Receipt } from "lucide-react";
 import { BarcodeScanner } from "@/components/admin/scanner/barcode-scanner";
 import { lookupProductByBarcodeAction } from "@/app/actions/scan";
-import { submitCounterSaleAction } from "@/app/actions/pos";
+import {
+  submitCounterSaleAction,
+  type PosKhqrPayment,
+} from "@/app/actions/pos";
 import { Button } from "@/components/ui/button";
+import { KhqrPayPanel } from "@/components/checkout/khqr-pay-panel";
 import { useFormatPrice } from "@/lib/settings/store-config";
-import { type PaymentMethod } from "@/lib/constants";
-import { PAYMENT_INSTRUCTIONS } from "@/lib/checkout/payment-instructions";
-
-// Counter sales only accept KHQR or cash at the till.
-const POS_PAYMENT_METHODS = ["khqr", "cash"] as const satisfies readonly PaymentMethod[];
+import {
+  CHECKOUT_PAYMENT_METHODS,
+  PAYMENT_METHOD_LABEL,
+  type PaymentMethod,
+} from "@/lib/constants";
 
 type CartLine = {
   productId: string;
@@ -33,6 +37,9 @@ export function PosFlow() {
   const [lines, setLines] = useState<CartLine[]>([]);
   const [payment, setPayment] = useState<PaymentMethod>("cash");
   const [submitting, startTransition] = useTransition();
+  const [khqrPending, setKhqrPending] = useState<
+    (PosKhqrPayment & { orderId: string; total: number }) | null
+  >(null);
 
   const totals = useMemo(() => {
     const subtotal = lines.reduce((sum, l) => sum + l.unitPrice * l.quantity, 0);
@@ -133,6 +140,16 @@ export function PosFlow() {
       });
       if (!result.ok) {
         toast.error(result.error);
+        return;
+      }
+      if (result.khqr) {
+        // KHQR: show the QR / checkout link and poll until the customer pays.
+        setLines([]);
+        setKhqrPending({
+          ...result.khqr,
+          orderId: result.orderId,
+          total: result.total,
+        });
         return;
       }
       toast.success(`Sale recorded · ${formatPrice(result.total)}`);
@@ -237,7 +254,7 @@ export function PosFlow() {
           Payment
         </h2>
         <div className="grid grid-cols-2 gap-2">
-          {POS_PAYMENT_METHODS.map((m) => {
+          {CHECKOUT_PAYMENT_METHODS.map((m) => {
             const active = m === payment;
             return (
               <button
@@ -250,7 +267,7 @@ export function PosFlow() {
                     : "border-border bg-background text-muted-foreground hover:text-foreground"
                 }`}
               >
-                {PAYMENT_INSTRUCTIONS[m].label}
+                {PAYMENT_METHOD_LABEL[m]}
               </button>
             );
           })}
@@ -280,6 +297,40 @@ export function PosFlow() {
           onDecoded={handleDecoded}
           onCancel={() => setScanning(false)}
         />
+      ) : null}
+
+      {khqrPending ? (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-foreground/40 p-4 backdrop-blur-sm sm:items-center"
+          role="dialog"
+          aria-modal="true"
+          aria-label="KHQR payment"
+        >
+          <div className="flex w-full max-w-md flex-col gap-3">
+            <KhqrPayPanel
+              token={khqrPending.token}
+              orderId={khqrPending.orderId}
+              amount={khqrPending.total}
+              initialStatus={khqrPending.status}
+              expiresAt={khqrPending.expiresAt}
+              checkoutUrl={khqrPending.checkoutUrl}
+              qrPayload={khqrPending.qrPayload}
+              successHref={`/admin/orders/${khqrPending.orderId}`}
+              checkoutTarget="_blank"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              className="bg-background"
+              onClick={() => {
+                setKhqrPending(null);
+                router.push(`/admin/orders/${khqrPending.orderId}`);
+              }}
+            >
+              Close — settle later from the order
+            </Button>
+          </div>
+        </div>
       ) : null}
     </div>
   );

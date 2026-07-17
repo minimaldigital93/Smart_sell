@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getProductByIdAdmin } from "@/services/products-admin";
 import { listActiveCategories, getCategory } from "@/services/categories";
+import { getMyStoreId } from "@/services/stores";
 import { ProductForm } from "@/components/admin/product-form";
 import { DeleteProductButton } from "@/components/admin/delete-product-button";
 import type { ShopCategory } from "@/types";
@@ -42,6 +43,7 @@ export default async function EditProductPage({ params }: { params: Params }) {
       <ProductForm
         mode="edit"
         categories={options}
+        storeId={await getMyStoreId()}
         defaults={{
           id: product.id,
           name: product.name,

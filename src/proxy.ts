@@ -7,6 +7,10 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|icons/|manifest.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    // api/khqr is excluded: the webhook authenticates by signature, the status
+    // poll by unguessable token, and the reconcile cron by bearer secret —
+    // none need a session or tenant resolution (saves 2 Supabase round-trips
+    // per poll).
+    "/((?!_next/static|_next/image|favicon.ico|icons/|manifest.webmanifest|api/khqr/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

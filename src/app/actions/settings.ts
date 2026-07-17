@@ -52,7 +52,10 @@ export async function updateStoreSettingsAction(
       return { ok: false, error: "Logo must be PNG, JPEG, WebP, or SVG" };
     }
     const ext = (logo.name.split(".").pop() ?? "png").toLowerCase().slice(0, 4);
-    const path = `logo-${Date.now()}.${ext}`;
+    // Store-prefixed path: flat logo-<timestamp> names let two stores
+    // overwrite each other's logos (audit C3); the 0045 policies also
+    // require this prefix for non-service writes.
+    const path = `stores/${profile.store_id}/logo-${Date.now()}.${ext}`;
     const arrayBuf = await logo.arrayBuffer();
 
     // Prefer the service-role client so the write doesn't hinge on a storage
@@ -62,7 +65,7 @@ export async function updateStoreSettingsAction(
       .from(LOGO_BUCKET)
       .upload(path, arrayBuf, {
         cacheControl: "3600",
-        upsert: true,
+        upsert: false,
         contentType: logo.type,
       });
     if (uploadError) {

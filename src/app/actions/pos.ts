@@ -4,11 +4,15 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { requireStaff } from "@/lib/auth/session";
-import { PAYMENT_METHODS } from "@/lib/constants";
+import { requirePlanCapability } from "@/lib/billing/capabilities";
+import { requestOrigin } from "@/lib/http/origin";
+import { mintOrderKhqrPayment } from "@/services/payments";
+import { CHECKOUT_PAYMENT_METHODS } from "@/lib/constants";
 
 const counterSaleSchema = z.object({
-  payment_method: z.enum(PAYMENT_METHODS),
+  payment_method: z.enum(CHECKOUT_PAYMENT_METHODS),
   customer_name: z.string().trim().max(120).optional().or(z.literal("")),
   phone: z.string().trim().max(32).optional().or(z.literal("")),
   note: z.string().trim().max(500).optional().or(z.literal("")),
@@ -22,14 +26,24 @@ const counterSaleSchema = z.object({
     .min(1, "Add at least one item"),
 });
 
+export type PosKhqrPayment = {
+  token: string;
+  status: "pending" | "qr_generated" | "waiting_payment";
+  expiresAt: string | null;
+  checkoutUrl: string | null;
+  qrPayload: string | null;
+};
+
 export type SubmitCounterSaleResult =
-  | { ok: true; orderId: string; total: number }
+  | { ok: true; orderId: string; total: number; khqr?: PosKhqrPayment }
   | { ok: false; error: string };
 
 export async function submitCounterSaleAction(
   input: unknown,
 ): Promise<SubmitCounterSaleResult> {
   const { user } = await requireStaff();
+  const gate = await requirePlanCapability("pos");
+  if (!gate.ok) return { ok: false, error: gate.error };
 
   const parsed = counterSaleSchema.safeParse(input);
   if (!parsed.success) {
@@ -142,7 +156,44 @@ export async function submitCounterSaleAction(
     return { ok: false, error: "Could not save sale items. Please retry." };
   }
 
-  // 2. Flip status -> payment_confirmed; trigger decrements stock atomically.
+  // 2a. KHQR at the till: keep the order pending and mint a payment attempt —
+  //     the QR panel polls it and finalize (webhook/poll) confirms the order,
+  //     which deducts stock. No manual status flip.
+  if (v.payment_method === "khqr") {
+    const { data: orderRow } = await supabase
+      .from("orders")
+      .select("store_id")
+      .eq("id", orderId)
+      .single();
+    if (!orderRow) {
+      await discardOrder();
+      return { ok: false, error: "Could not load the sale. Please retry." };
+    }
+    const minted = await mintOrderKhqrPayment(
+      { id: orderId, store_id: orderRow.store_id, total },
+      { origin: await requestOrigin() },
+    );
+    if (!minted.ok) {
+      await discardOrder();
+      return { ok: false, error: minted.error };
+    }
+    revalidatePath("/admin/orders");
+    return {
+      ok: true,
+      orderId,
+      total,
+      khqr: {
+        token: minted.payment.public_token,
+        status: "qr_generated",
+        expiresAt: minted.payment.expires_at,
+        checkoutUrl: minted.payment.checkout_url,
+        qrPayload: minted.payment.qr_payload,
+      },
+    };
+  }
+
+  // 2b. Cash: flip status -> payment_confirmed; trigger decrements stock
+  //     atomically. Then record the settled cash payment (cashier + time).
   const { error: statusErr } = await supabase
     .from("orders")
     .update({ status: "payment_confirmed" })
@@ -158,6 +209,27 @@ export async function submitCounterSaleAction(
     }
     console.error("[pos.submit] status update", statusErr);
     return { ok: false, error: "Could not finalize sale." };
+  }
+
+  const service = createServiceClient();
+  if (service) {
+    const { data: orderRow } = await service
+      .from("orders")
+      .select("store_id")
+      .eq("id", orderId)
+      .single();
+    if (orderRow) {
+      const { error: payErr } = await service.from("order_payments").insert({
+        store_id: orderRow.store_id,
+        order_id: orderId,
+        method: "cash",
+        status: "paid",
+        amount: total,
+        paid_at: new Date().toISOString(),
+        received_by: user.id,
+      });
+      if (payErr) console.error("[pos.submit] payment row", payErr);
+    }
   }
 
   revalidatePath("/admin/orders");

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  KHQR payment reconcile cron (safety net for missed webhooks).
+
+  Install on the production Mac mini:
+    1. Replace __KHQR_RECONCILE_SECRET__ with the value from .env.local.
+    2. cp scripts/com.minimaldigital.smartsell.khqr-reconcile.plist.example \
+         ~/Library/LaunchAgents/com.minimaldigital.smartsell.khqr-reconcile.plist
+    3. launchctl load ~/Library/LaunchAgents/com.minimaldigital.smartsell.khqr-reconcile.plist
+
+  Runs every 300s: finalizes settled-but-unnotified payments, expires stale QRs.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.minimaldigital.smartsell.khqr-reconcile</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/curl</string>
+    <string>-fsS</string>
+    <string>-X</string>
+    <string>POST</string>
+    <string>-H</string>
+    <string>Authorization: Bearer __KHQR_RECONCILE_SECRET__</string>
+    <string>http://127.0.0.1:3000/api/khqr/reconcile</string>
+  </array>
+  <key>StartInterval</key>
+  <integer>300</integer>
+  <key>StandardOutPath</key>
+  <string>/tmp/smartsell-khqr-reconcile.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/smartsell-khqr-reconcile.log</string>
+</dict>
+</plist>

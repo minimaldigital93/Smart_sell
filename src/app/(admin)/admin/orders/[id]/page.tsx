@@ -8,7 +8,9 @@ import { buttonVariants } from "@/components/ui/button";
 import { OrderStatusBadge } from "@/components/admin/order-status-badge";
 import { OrderStatusControl } from "@/components/admin/orders/order-status-control";
 import { OrderTimeline } from "@/components/admin/orders/order-timeline";
-import { PAYMENT_INSTRUCTIONS } from "@/lib/checkout/payment-instructions";
+import { OrderPaymentsPanel } from "@/components/admin/orders/order-payments-panel";
+import { listPaymentsForOrder } from "@/services/payments";
+import { PAYMENT_METHOD_LABEL } from "@/lib/constants";
 import { ClientDate } from "@/components/shared/client-date";
 import { getSignedStorageUrl } from "@/lib/storage/signed-url";
 
@@ -25,11 +27,12 @@ export default async function AdminOrderDetailPage({
   const data = await getOrderForAdmin(id);
   if (!data) notFound();
   const { order, items } = data;
-  const { currency } = await getStoreSettings();
-  const receiptUrl = await getSignedStorageUrl(
-    "payment-proofs",
-    order.payment_image,
-  );
+  const [{ currency }, payments, receiptUrl] = await Promise.all([
+    getStoreSettings(),
+    listPaymentsForOrder(order.id),
+    // Legacy orders only: pre-0047 checkouts uploaded a payment screenshot.
+    getSignedStorageUrl("payment-proofs", order.payment_image),
+  ]);
 
   const isCounterSale = order.address === "In-store pickup";
   const isCompletedSale =
@@ -157,9 +160,13 @@ export default async function AdminOrderDetailPage({
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
           Payment
         </h2>
-        <p className="text-sm font-medium">
-          {PAYMENT_INSTRUCTIONS[order.payment_method].label}
-        </p>
+        {payments.length > 0 ? (
+          <OrderPaymentsPanel payments={payments} currency={currency} />
+        ) : (
+          <p className="text-sm font-medium">
+            {PAYMENT_METHOD_LABEL[order.payment_method]}
+          </p>
+        )}
         {receiptUrl ? (
           <a
             href={receiptUrl}
@@ -167,8 +174,9 @@ export default async function AdminOrderDetailPage({
             rel="noopener noreferrer"
             className="mt-3 inline-block overflow-hidden rounded-xl border border-border"
           >
-            {/* Short-lived signed URL from the private payment-proofs bucket;
-                img tag avoids configuring remotePatterns for storage subpaths. */}
+            {/* Legacy pre-0047 screenshot proof. Short-lived signed URL from
+                the private payment-proofs bucket; img tag avoids configuring
+                remotePatterns for storage subpaths. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={receiptUrl}
@@ -176,11 +184,7 @@ export default async function AdminOrderDetailPage({
               className="max-h-72 w-auto"
             />
           </a>
-        ) : (
-          <p className="mt-2 text-sm text-muted-foreground">
-            No screenshot uploaded.
-          </p>
-        )}
+        ) : null}
       </section>
     </div>
   );

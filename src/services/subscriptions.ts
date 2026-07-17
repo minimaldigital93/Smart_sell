@@ -29,13 +29,26 @@ export const getPlanByCode = cache(
   },
 );
 
-/** The current store's subscription row (RLS scopes it to the caller's store). */
+/**
+ * The current store's subscription row. Explicitly scoped to the caller's
+ * store: RLS alone lets a superadmin (store_id null) see every row, which made
+ * `.maybeSingle()` throw on /admin/billing for that account.
+ */
 export const getMySubscription = cache(
   async (): Promise<Subscription | null> => {
     const supabase = await createClient();
+    const { data: auth } = await supabase.auth.getUser();
+    if (!auth.user) return null;
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("store_id")
+      .eq("id", auth.user.id)
+      .maybeSingle();
+    if (!profile?.store_id) return null;
     const { data } = await supabase
       .from("subscriptions")
       .select("*")
+      .eq("store_id", profile.store_id)
       .maybeSingle();
     return data ?? null;
   },

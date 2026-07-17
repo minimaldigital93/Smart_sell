@@ -5,7 +5,6 @@ export type PlanLimits = {
   max_products: number;
   max_staff: number;
   coupons: boolean;
-  loyalty: boolean;
   pos: boolean;
   custom_domain: boolean;
   advanced_analytics: boolean;
@@ -15,7 +14,6 @@ export const DEFAULT_PLAN_LIMITS: PlanLimits = {
   max_products: 50,
   max_staff: 1,
   coupons: false,
-  loyalty: false,
   pos: false,
   custom_domain: false,
   advanced_analytics: false,
@@ -42,7 +40,6 @@ export function parsePlanLimits(limits: Json | null | undefined): PlanLimits {
     max_products: num(l.max_products, DEFAULT_PLAN_LIMITS.max_products),
     max_staff: num(l.max_staff, DEFAULT_PLAN_LIMITS.max_staff),
     coupons: bool(l.coupons, DEFAULT_PLAN_LIMITS.coupons),
-    loyalty: bool(l.loyalty, DEFAULT_PLAN_LIMITS.loyalty),
     pos: bool(l.pos, DEFAULT_PLAN_LIMITS.pos),
     custom_domain: bool(l.custom_domain, DEFAULT_PLAN_LIMITS.custom_domain),
     advanced_analytics: bool(

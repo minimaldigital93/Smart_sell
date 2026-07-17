@@ -36,8 +36,10 @@ const EMPTY_SUMMARY: DashboardSummary = {
 export async function getDashboardSummary(): Promise<DashboardSummary> {
   const supabase = await createClient();
   const { data, error } = await supabase
-    .from("v_admin_dashboard" as never)
-    .select("*")
+    .from("v_admin_dashboard")
+    .select(
+      "total_orders, pending_orders, active_orders, total_revenue, low_stock_count, out_of_stock_count, active_products",
+    )
     .maybeSingle<DashboardSummary>();
 
   if (error) {
@@ -50,7 +52,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
 export async function getSalesByDay(days = 14): Promise<SalesDay[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
-    .from("v_sales_by_day" as never)
+    .from("v_sales_by_day")
     .select("*")
     .order("day", { ascending: false })
     .limit(days)
@@ -67,7 +69,7 @@ export async function getSalesByDay(days = 14): Promise<SalesDay[]> {
 export async function getLowStock(limit = 5): Promise<LowStockRow[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
-    .from("v_low_stock_products" as never)
+    .from("v_low_stock_products")
     .select("*")
     .limit(limit)
     .returns<LowStockRow[]>();

@@ -11,7 +11,7 @@ import type {
 export type PlatformSummary = {
   mrr: number;
   active_stores: number;
-  trial_stores: number;
+  total_stores: number;
   overdue_stores: number;
   total_revenue: number;
   total_expense: number;
@@ -22,7 +22,7 @@ export type PlatformSummary = {
 const EMPTY_SUMMARY: PlatformSummary = {
   mrr: 0,
   active_stores: 0,
-  trial_stores: 0,
+  total_stores: 0,
   overdue_stores: 0,
   total_revenue: 0,
   total_expense: 0,
@@ -38,7 +38,7 @@ export const getPlatformSummary = cache(async (): Promise<PlatformSummary> => {
   return {
     mrr: Number(row.mrr ?? 0),
     active_stores: row.active_stores ?? 0,
-    trial_stores: row.trial_stores ?? 0,
+    total_stores: row.total_stores ?? 0,
     overdue_stores: row.overdue_stores ?? 0,
     total_revenue: Number(row.total_revenue ?? 0),
     total_expense: Number(row.total_expense ?? 0),

@@ -1,7 +1,7 @@
 import type { Order, OrderItem } from "@/types";
 import { APP_NAME, APP_TAGLINE } from "@/lib/constants";
 import { STATUS_LABEL } from "@/lib/orders/transitions";
-import { PAYMENT_INSTRUCTIONS } from "@/lib/checkout/payment-instructions";
+import { PAYMENT_METHOD_LABEL } from "@/lib/constants";
 import { formatPrice } from "@/lib/utils";
 import { getStoreSettings } from "@/services/settings";
 import { ClientDate } from "@/components/shared/client-date";
@@ -45,7 +45,7 @@ export async function InvoiceView({
           <p className="mt-3 text-xs uppercase tracking-wider text-black/50">
             Payment
           </p>
-          <p>{PAYMENT_INSTRUCTIONS[order.payment_method].label}</p>
+          <p>{PAYMENT_METHOD_LABEL[order.payment_method]}</p>
         </div>
       </section>
 

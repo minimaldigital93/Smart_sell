@@ -27,7 +27,14 @@ const MODE_META: Record<Mode, { label: string; verb: string; cta: string }> = {
   lookup: { label: "Lookup", verb: "found", cta: "Open product" },
 };
 
-export function ScanFlow({ mode }: { mode: Mode }) {
+export function ScanFlow({
+  mode,
+  storeId,
+}: {
+  mode: Mode;
+  /** Owning store — proof uploads must live under stores/{id}/ (0045). */
+  storeId: string | null;
+}) {
   const router = useRouter();
   const [scanning, setScanning] = useState(false);
   const [found, setFound] = useState<Found | null>(null);
@@ -109,6 +116,7 @@ export function ScanFlow({ mode }: { mode: Mode }) {
         <FoundCard
           found={found}
           mode={mode}
+          storeId={storeId}
           quantity={quantity}
           onQuantityChange={setQuantity}
           proofUrl={proofUrl}
@@ -150,6 +158,7 @@ export function ScanFlow({ mode }: { mode: Mode }) {
 function FoundCard({
   found,
   mode,
+  storeId,
   quantity,
   onQuantityChange,
   proofUrl,
@@ -160,6 +169,7 @@ function FoundCard({
 }: {
   found: Found;
   mode: Mode;
+  storeId: string | null;
   quantity: number;
   onQuantityChange: (q: number) => void;
   proofUrl: string | null;
@@ -243,6 +253,7 @@ function FoundCard({
           value={proofUrl}
           onChange={onProofChange}
           productId={found.product.id}
+          storeId={storeId}
           disabled={confirming}
         />
       ) : null}

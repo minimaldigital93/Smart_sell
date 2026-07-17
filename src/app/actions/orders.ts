@@ -12,22 +12,16 @@ import { notifyNewOrder } from "@/lib/notifications/telegram";
 import { updateOrderStatusSchema } from "@/lib/orders/schemas";
 import { canTransition } from "@/lib/orders/transitions";
 import { getCurrentStoreId } from "@/lib/tenant/context";
+import { requestOrigin } from "@/lib/http/origin";
+import { createCashPayment, mintOrderKhqrPayment } from "@/services/payments";
 
 export type SubmitOrderResult =
-  | { ok: true; orderId: string }
+  | { ok: true; orderId: string; payToken?: string }
   | { ok: false; error: string };
 
 export type UpdateOrderStatusResult =
   | { ok: true }
   | { ok: false; error: string };
-
-const MAX_UPLOAD_BYTES = 5 * 1024 * 1024; // 5 MB (matches storage bucket)
-const ALLOWED_MIME = new Set([
-  "image/png",
-  "image/jpeg",
-  "image/webp",
-  "image/heic",
-]);
 
 export async function submitOrderAction(
   formData: FormData,
@@ -53,7 +47,6 @@ export async function submitOrderAction(
     payment_method: formData.get("payment_method"),
     items,
     coupon_code: (formData.get("coupon_code") as string | null) || undefined,
-  points_to_redeem: Number(formData.get("points_to_redeem") ?? 0) || 0,
   });
   if (!parsed.success) {
     return {
@@ -78,56 +71,12 @@ export async function submitOrderAction(
   );
   if (accountErr) return { ok: false, error: accountErr };
 
-  // 2. Validate + size the payment screenshot BEFORE touching the order. The
-  //    actual order (price recompute, stock check, coupon + points redemption)
-  //    is created atomically by the create_customer_order RPC so the data layer
-  //    — not just this action — owns price/stock/credit integrity.
-  const file = formData.get("screenshot");
-  if (!(file instanceof File) || file.size === 0) {
-    return { ok: false, error: "Please attach a payment screenshot." };
-  }
-  if (file.size > MAX_UPLOAD_BYTES) {
-    return { ok: false, error: "Screenshot is larger than 5 MB." };
-  }
-  if (!ALLOWED_MIME.has(file.type)) {
-    return {
-      ok: false,
-      error: "Screenshot must be a PNG, JPEG, WebP, or HEIC image.",
-    };
-  }
-
-  // 3. Upload the screenshot through the service-role client so the
-  //    payment-proofs bucket can deny direct anon/authenticated inserts — a
-  //    public anon upload policy would otherwise let anyone spam the bucket.
-  //    Falls back to the request client if the service key isn't configured.
-  const storageClient = createServiceClient() ?? supabase;
+  // 2. Create the order atomically. The RPC re-fetches prices, verifies stock,
+  //    and redeems the coupon in a single transaction — so a lost race (stock
+  //    gone, coupon exhausted) rolls the whole order back instead of leaving a
+  //    paid-but-unfulfillable order behind. No screenshot: payment is settled
+  //    by the KHQR gateway (webhook/poll) or by staff for cash on delivery.
   const orderId = randomUUID();
-  const ext = (file.name.split(".").pop() ?? "png").toLowerCase().slice(0, 4);
-  const path = `${orderId}/${randomUUID()}.${ext}`;
-  const arrayBuf = await file.arrayBuffer();
-  const { error: uploadErr } = await storageClient.storage
-    .from("payment-proofs")
-    .upload(path, arrayBuf, {
-      contentType: file.type,
-      cacheControl: "3600",
-      upsert: false,
-    });
-  if (uploadErr) {
-    console.error("[orders.submit] upload", uploadErr);
-    return { ok: false, error: "Could not upload screenshot. Please retry." };
-  }
-  // Store the bare object path (bucket is private); display sites mint a signed
-  // URL via getSignedStorageUrl.
-  const cleanupUpload = () =>
-    storageClient.storage
-      .from("payment-proofs")
-      .remove([path])
-      .catch((err) => console.error("[orders.submit] cleanup upload", err));
-
-  // 4. Create the order atomically. The RPC re-fetches prices, verifies stock,
-  //    and redeems the coupon + loyalty points in a single transaction — so a
-  //    lost race (stock gone, points already spent) rolls the whole order back
-  //    instead of leaving a paid-but-unfulfillable order behind.
   const { data: result, error: rpcErr } = await supabase.rpc(
     "create_customer_order",
     {
@@ -137,23 +86,59 @@ export async function submitOrderAction(
       p_address: values.address,
       p_note: values.note?.trim() ? values.note.trim() : null,
       p_payment_method: values.payment_method,
-      p_payment_image: path,
       p_items: values.items.map((i) => ({
         product_id: i.productId,
         quantity: i.quantity,
       })),
       p_coupon_code: values.coupon_code?.trim() || null,
-      p_points: values.points_to_redeem ?? 0,
       p_store_id: storeId,
     },
   );
 
   if (rpcErr || !result) {
-    await cleanupUpload();
     return { ok: false, error: mapOrderError(rpcErr?.message) };
   }
 
   const total = Number((result as { total?: number }).total ?? 0);
+
+  // 3. Attach the payment: a pending cash row (settled by staff on delivery)
+  //    or a fresh KHQR attempt whose pay page the client redirects to. The
+  //    order's definitive store comes from the row the RPC stamped.
+  let payToken: string | undefined;
+  const service = createServiceClient();
+  const { data: orderRow } = service
+    ? await service
+        .from("orders")
+        .select("id, store_id, total")
+        .eq("id", orderId)
+        .single()
+    : { data: null };
+
+  if (orderRow) {
+    if (values.payment_method === "cash") {
+      await createCashPayment({
+        id: orderRow.id,
+        store_id: orderRow.store_id,
+        total: Number(orderRow.total),
+      });
+    } else {
+      const minted = await mintOrderKhqrPayment(
+        {
+          id: orderRow.id,
+          store_id: orderRow.store_id,
+          total: Number(orderRow.total),
+        },
+        { origin: await requestOrigin() },
+      );
+      if (minted.ok) {
+        payToken = minted.payment.public_token;
+      } else {
+        // Store lost its KHQR config between page load and submit — the order
+        // stands; staff follow up like a COD order.
+        console.error("[orders.submit] khqr mint failed", minted.error);
+      }
+    }
+  }
 
   // Best-effort Telegram ping to the shop owner.
   void notifyNewOrder({
@@ -165,7 +150,7 @@ export async function submitOrderAction(
     itemCount: values.items.length,
   });
 
-  return { ok: true, orderId };
+  return { ok: true, orderId, payToken };
 }
 
 type SupabaseServer = Awaited<ReturnType<typeof createClient>>;
@@ -240,9 +225,6 @@ function mapOrderError(message?: string): string {
       ? `Coupon requires a $${Number(min[1]).toFixed(2)} minimum.`
       : "Your subtotal is below the coupon minimum.";
   }
-  if (msg.includes("POINTS_CHANGED")) {
-    return "Your points balance changed — please review and try again.";
-  }
   if (msg.includes("no longer available") || msg.includes("not available")) {
     return "A product in your cart is no longer available.";
   }
@@ -302,8 +284,9 @@ export async function updateOrderStatusAction(
           "One or more items have no inventory row — open them in Products and seed stock first.",
       };
     }
+    // Never surface raw DB error text to the UI (audit M15).
     console.error("[orders.updateStatus]", updateErr);
-    return { ok: false, error: updateErr.message || "Could not update status." };
+    return { ok: false, error: "Could not update status. Please retry." };
   }
 
   if (!updated || updated.length === 0) {
@@ -313,22 +296,6 @@ export async function updateOrderStatusAction(
       error:
         "Update was blocked. Your account may not have staff permissions — check profiles.role.",
     };
-  }
-
-  // Earn loyalty points when an order is delivered (best-effort).
-  if (nextStatus === "delivered") {
-    const { data: order } = await supabase
-      .from("orders")
-      .select("user_id, total")
-      .eq("id", orderId)
-      .maybeSingle();
-    if (order?.user_id) {
-      await supabase.rpc("earn_loyalty_points", {
-        p_user_id: order.user_id,
-        p_order_id: orderId,
-        p_total: order.total,
-      });
-    }
   }
 
   revalidatePath("/admin/orders");

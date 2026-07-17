@@ -7,18 +7,13 @@ import {
   KeyRound,
   LayoutDashboard,
   ChevronRight,
-  Gift,
   type LucideIcon,
 } from "lucide-react";
 import { getCurrentProfile } from "@/lib/auth/session";
 import { SignOutButton } from "@/components/auth/sign-out-button";
-import { getLoyaltyBalance, getLoyaltyHistory } from "@/services/loyalty";
-import { formatPrice, cn } from "@/lib/utils";
-import { getStoreSettings } from "@/services/settings";
+import { cn } from "@/lib/utils";
 import { PageHero } from "@/components/shared/page-hero";
 import { buttonVariants } from "@/components/ui/button";
-import { POINTS_PER_DOLLAR_CREDIT } from "@/lib/loyalty/constants";
-import type { LoyaltyTransaction } from "@/types";
 
 type SearchParams = Promise<{ reset?: string }>;
 
@@ -43,7 +38,7 @@ export default async function AccountPage(props: { searchParams: SearchParams })
         <PageHero
           icon={User}
           title="Account"
-          subtitle="Sign in to view your profile, orders and loyalty points."
+          subtitle="Sign in to view your profile and orders."
         />
         <section className="flex flex-col gap-3">
           <Link
@@ -65,12 +60,6 @@ export default async function AccountPage(props: { searchParams: SearchParams })
     );
   }
   const { user, profile } = session;
-
-  const [loyaltyPoints, loyaltyHistory, { currency }] = await Promise.all([
-    getLoyaltyBalance(profile.id),
-    getLoyaltyHistory(profile.id, 10),
-    getStoreSettings(),
-  ]);
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 pt-2">
@@ -103,36 +92,6 @@ export default async function AccountPage(props: { searchParams: SearchParams })
           Your password was updated.
         </p>
       ) : null}
-
-      {/* Loyalty points card */}
-      <section className="relative overflow-hidden rounded-2xl border border-pink-200 bg-linear-to-br from-pink-50 to-white p-5 shadow-soft">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="flex items-center gap-2 text-sm font-semibold tracking-tight">
-            <span className="grid h-7 w-7 place-items-center rounded-full bg-pink-100 text-pink-500">
-              <Gift className="h-4 w-4" />
-            </span>
-            Loyalty points
-          </h2>
-          <span className="rounded-full bg-pink-100 px-3 py-1 text-sm font-bold text-pink-600">
-            {loyaltyPoints} pts
-          </span>
-        </div>
-        <p className="mb-4 text-xs text-muted-foreground">
-          Earn 1 pt per {formatPrice(1, currency)} spent · {POINTS_PER_DOLLAR_CREDIT} pts = {formatPrice(1, currency)} off at checkout
-        </p>
-
-        {loyaltyHistory.length > 0 ? (
-          <ul className="flex flex-col gap-2">
-            {loyaltyHistory.map((tx) => (
-              <LoyaltyTxRow key={tx.id} tx={tx} />
-            ))}
-          </ul>
-        ) : (
-          <p className="text-xs text-muted-foreground">
-            No transactions yet. Place an order to start earning!
-          </p>
-        )}
-      </section>
 
       {/* Profile details */}
       <section className="rounded-2xl border border-border bg-card p-5 shadow-soft">
@@ -185,40 +144,6 @@ function MenuLink({
       <span className="flex-1">{label}</span>
       <ChevronRight className="h-4 w-4 text-muted-foreground" />
     </Link>
-  );
-}
-
-function LoyaltyTxRow({ tx }: { tx: LoyaltyTransaction }) {
-  const isEarn = tx.type === "earn" || tx.type === "manual";
-  const sign = isEarn ? "+" : "−";
-  const colorClass = isEarn ? "text-success" : "text-pink-600";
-  const label =
-    tx.type === "earn"
-      ? "Earned"
-      : tx.type === "redeem"
-        ? "Redeemed"
-        : tx.type === "manual"
-          ? "Adjusted"
-          : "Expired";
-  const date = new Date(tx.created_at).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-
-  return (
-    <li className="flex items-center justify-between text-xs">
-      <div>
-        <span className="font-medium">{label}</span>
-        {tx.note ? (
-          <span className="ml-1 text-muted-foreground">· {tx.note}</span>
-        ) : null}
-        <span className="ml-2 text-muted-foreground">{date}</span>
-      </div>
-      <span className={`font-semibold tabular-nums ${colorClass}`}>
-        {sign}{tx.points} pts
-      </span>
-    </li>
   );
 }
 

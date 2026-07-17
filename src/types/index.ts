@@ -35,7 +35,6 @@ export type InventoryMovement =
 export type Notification = Database["public"]["Tables"]["notifications"]["Row"];
 
 export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
-export type LoyaltyTransaction = Database["public"]["Tables"]["loyalty_transactions"]["Row"];
 
 export type Store = Database["public"]["Tables"]["stores"]["Row"];
 export type StoreInsert = Database["public"]["Tables"]["stores"]["Insert"];

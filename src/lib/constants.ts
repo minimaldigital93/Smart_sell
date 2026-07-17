@@ -11,15 +11,24 @@ export const CATEGORIES = [
 
 export type CategorySlug = (typeof CATEGORIES)[number]["slug"];
 
+// The DB enum keeps aba/acleda/wing so historical orders stay valid, but new
+// checkouts offer exactly two methods: dynamic KHQR and cash on delivery.
 export const PAYMENT_METHODS = ["khqr", "aba", "acleda", "wing", "cash"] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
-export const ONLINE_PAYMENT_METHODS = [
+export const CHECKOUT_PAYMENT_METHODS = [
   "khqr",
-  "aba",
-  "acleda",
-  "wing",
+  "cash",
 ] as const satisfies readonly PaymentMethod[];
+
+/** Display labels for every method (incl. legacy ones on old orders). */
+export const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
+  khqr: "KHQR",
+  aba: "ABA Bank (legacy)",
+  acleda: "Acleda Bank (legacy)",
+  wing: "Wing (legacy)",
+  cash: "Cash",
+};
 
 export const ORDER_STATUSES = [
   "pending",
@@ -41,16 +50,12 @@ export const DEFAULT_STORE_SLUG = "default";
 
 /** Lifecycle states for a store/tenant. Mirrors stores.status + grace/lock. */
 export const STORE_STATUSES = [
-  "trial",
   "active",
   "grace",
   "locked",
   "cancelled",
 ] as const;
 export type StoreStatus = (typeof STORE_STATUSES)[number];
-
-/** Free-trial length for a newly registered store (days). */
-export const TRIAL_DAYS = 14;
 
 /** Days a lapsed store stays usable (with a banner) before it locks. */
 export const GRACE_DAYS = 3;

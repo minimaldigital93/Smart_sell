@@ -3,7 +3,9 @@ import { ChevronRight, Tags } from "lucide-react";
 import { requireAdmin } from "@/lib/auth/session";
 import { getStoreSettings } from "@/services/settings";
 import { getMyStore } from "@/services/stores";
+import { getMyPaymentSettingsAction } from "@/app/actions/payments";
 import { SettingsForm } from "@/components/admin/settings/settings-form";
+import { PaymentSettingsForm } from "@/components/admin/settings/payment-settings-form";
 import { CustomDomain } from "@/components/settings/custom-domain";
 
 export const metadata = { title: "Settings" };
@@ -11,7 +13,11 @@ export const metadata = { title: "Settings" };
 export default async function SettingsPage() {
   // Settings are admin-only to edit (staff can see the rest of admin).
   await requireAdmin();
-  const [settings, store] = await Promise.all([getStoreSettings(), getMyStore()]);
+  const [settings, store, paymentSettings] = await Promise.all([
+    getStoreSettings(),
+    getMyStore(),
+    getMyPaymentSettingsAction(),
+  ]);
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6">
@@ -38,6 +44,8 @@ export default async function SettingsPage() {
         </span>
         <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
       </Link>
+
+      {paymentSettings ? <PaymentSettingsForm initial={paymentSettings} /> : null}
 
       <CustomDomain
         domain={store?.custom_domain ?? null}
